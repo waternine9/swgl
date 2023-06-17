@@ -127,7 +127,7 @@ struct glslTokenized
 	std::vector<glslVariable*> GlobalVars;
 };
 
-std::vector<char> glslOpChars = { '+', '-', '*', '/', '>', '<', '=', '.' };
+std::vector<char> glslOpChars = { '+', '-', '*', '/', '>', '<', '=' };
 
 class glslTokenizer
 {
@@ -139,6 +139,17 @@ public:
 	int TellNext(char c)
 	{
 		for (int i = At; i < Code.size(); i++)
+		{
+			if (Code[i] == c)
+			{
+				return i;
+			}
+		}
+		return 0x7FFFFFFF;
+	}
+	int TellNextWithEnd(char c, int end)
+	{
+		for (int i = At; i < end; i++)
 		{
 			if (Code[i] == c)
 			{
@@ -243,12 +254,6 @@ public:
 						*OutOp = GLSL_TOK_EQ;
 						return { i, i + 2 };
 					}
-
-					if (Operator == "." && !IsDigit(Code[i - 1]))
-					{
-						*OutOp = GLSL_TOK_SWIZZLE;
-						return { i, i + 1 };
-					}
 				}
 			}
 			if (Code[i] == '(') counter++;
@@ -311,7 +316,7 @@ public:
 	glslToken* TokenizeArgs(glslScope* Scope, int EndAt)
 	{
 		glslToken* Tok = new glslToken();
-		
+
 		while (At < EndAt)
 		{
 			while (Code[At] == ' ') At++;
@@ -327,11 +332,12 @@ public:
 
 			while (Code[At] == ' ') At++;
 		}
-		
+
 		At = EndAt + 1;
 
 		return Tok;
 	}
+
 	glslToken* TokenizeSubExpr(glslScope* Scope, int EndAt)
 	{
 		while (Code[At] == ' ') At++;
@@ -341,6 +347,56 @@ public:
 			int MatchingParam = TellNextMatching('(', ')');
 			At++;
 			glslToken* EnclosedTok = TokenizeExpr(Scope, MatchingParam);
+			
+			int Swizzle = -1;
+			for (int i = At; i < EndAt; i++)
+			{
+				if (Code[i] == ' ') break;
+				if (Code[i] == '.')
+				{
+					Swizzle = i + 1;
+					break;
+				}
+			}
+
+			if (Swizzle != -1)
+			{
+				glslToken* SwizzleTok = new glslToken;
+				SwizzleTok->Type = GLSL_TOK_SWIZZLE;
+				SwizzleTok->First = EnclosedTok;
+				for (int i = Swizzle; i < EndAt; i++)
+				{
+					char SwizzleChar = Code[i];
+
+					if (SwizzleChar == 'x' || SwizzleChar == 's')
+					{
+						SwizzleTok->Swizzle.push_back(0);
+					}
+					else if (SwizzleChar == 'y' || SwizzleChar == 't')
+					{
+						SwizzleTok->Swizzle.push_back(1);
+					}
+					else if (SwizzleChar == 'z')
+					{
+						SwizzleTok->Swizzle.push_back(2);
+					}
+					else if (SwizzleChar == 'w')
+					{
+						SwizzleTok->Swizzle.push_back(3);
+					}
+					else if (SwizzleChar == ' ')
+					{
+						break;
+					}
+					else
+					{
+						printf("SWGL: FATAL! GLSL compiler detected invalid swizzle component '%c'\n", SwizzleChar);
+						return 0;
+					}
+				}
+				EnclosedTok = SwizzleTok;
+			}
+
 			At = EndAt + 1;
 			return EnclosedTok;
 		}
@@ -441,9 +497,15 @@ public:
 		else
 		{
 			std::string ProbeVarName;
+			int Swizzle = -1;
 			for (int i = At; i < EndAt; i++)
 			{
 				if (Code[i] == ' ') break;
+				if (Code[i] == '.')
+				{
+					Swizzle = i + 1;
+					break;
+				}
 				ProbeVarName.push_back(Code[i]);
 			}
 
@@ -454,6 +516,45 @@ public:
 				
 				VarTok->Type = GLSL_TOK_VAR;
 				VarTok->Var = ProbeVar;
+
+				if (Swizzle != -1)
+				{
+					glslToken* SwizzleTok = new glslToken;
+					SwizzleTok->Type = GLSL_TOK_SWIZZLE;
+					SwizzleTok->First = VarTok;
+					for (int i = Swizzle; i < EndAt; i++)
+					{
+						char SwizzleChar = Code[i];
+
+						if (SwizzleChar == 'x' || SwizzleChar == 's')
+						{
+							SwizzleTok->Swizzle.push_back(0);
+						}
+						else if (SwizzleChar == 'y' || SwizzleChar == 't')
+						{
+							SwizzleTok->Swizzle.push_back(1);
+						}
+						else if (SwizzleChar == 'z')
+						{
+							SwizzleTok->Swizzle.push_back(2);
+						}
+						else if (SwizzleChar == 'w')
+						{
+							SwizzleTok->Swizzle.push_back(3);
+						}
+						else if (SwizzleChar == ' ')
+						{
+							break;
+						}
+						else
+						{
+							printf("SWGL: FATAL! GLSL compiler detected invalid swizzle component '%c'\n", SwizzleChar);
+							return 0;
+						}
+					}
+					VarTok = SwizzleTok;
+				}
+
 				At = EndAt + 1;
 				return VarTok;
 			}
@@ -479,56 +580,23 @@ public:
 
 		glslTokenType OpType;
 		std::pair<int, int> NextOp = TellNextOperator(&OpType);
+
 		Tok = TokenizeSubExpr(Scope, std::min(NextOp.first, EndAt));
 
-		while (At < EndAt)
+		while (At < EndAt && NextOp.first != 0x7FFFFFFF)
 		{
-			At--;
 			glslToken* SurroundToken = new glslToken;
 			SurroundToken->Type = OpType;
 			SurroundToken->First = Tok;
+
 			At = NextOp.second;
-			if (OpType == GLSL_TOK_SWIZZLE)
-			{
-				NextOp = TellNextOperator(&OpType);
-				int NextAt = std::min(NextOp.second, EndAt);
-				std::string SwizzleData = TellStringUntilNWS(std::min(NextOp.first, EndAt));
-				
-				for (char c : SwizzleData)
-				{
-					int SwizzleIdx;
 
-					if (c == 'x') SwizzleIdx = 0;
-					else if (c == 'y') SwizzleIdx = 1;
-					else if (c == 'z') SwizzleIdx = 2;
-					else if (c == 'w') SwizzleIdx = 3;
-
-					SurroundToken->Swizzle.push_back(SwizzleIdx);
-				}
-
-				if (NextAt >= EndAt)
-				{
-					At = EndAt + 1;
-					return SurroundToken;
-				}
-
-				At = NextAt;
-
-				Tok = SurroundToken;
-
-				SurroundToken = new glslToken;
-				SurroundToken->First = Tok;
-				SurroundToken->Type = OpType;
-			}
-
-			
 			NextOp = TellNextOperator(&OpType);
 
 			SurroundToken->Second = TokenizeSubExpr(Scope, std::min(NextOp.first, EndAt));
 
 			Tok = SurroundToken;
 
-			if (NextOp.first == 0x7FFFFFFF) break;
 		}
 		
 		At = EndAt + 1;
@@ -1701,8 +1769,14 @@ void DrawTriangle(glslExValue* Coords, std::vector<std::pair<glslExValue, glslVa
 
 	for (float y = minY;y <= maxY;y++)
 	{
+		if (y < 0) continue;
+		if (y >= GlobalFramebuffer->Height) break;
 		for (float x = minX; x <= maxX; x++)
 		{
+			if (x < 0) continue;
+			if (x >= GlobalFramebuffer->Width) break;
+
+
 			float u, v, w;
 			Barycentric(Coords[0], Coords[1], Coords[2], glslExValue{GLSL_FLOAT, x, y, 0.0f, 0.0f, 0}, u, v, w);
 
@@ -1946,7 +2020,7 @@ void glInit(GLsizei width, GLsizei height)
 	GlobalFramebuffer->ColorFormat = GL_RGBA;
 	GlobalFramebuffer->ColorAttachment = (uint32_t*)malloc(4 * width * height);
 
-	glslOpChars = std::vector<char>{ '+', '-', '*', '/', '>', '<', '=', '.' };
+	glslOpChars = std::vector<char>{ '+', '-', '*', '/', '>', '<', '=' };
 
 	GlobalArrayBuffer = 0;
 	GlobalBuffers = std::vector<Buffer*>();
