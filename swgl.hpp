@@ -84,6 +84,7 @@ void glUseProgram(GLuint program);
 GLuint glGenVertexArrays(GLsizei n, GLuint* arrays);
 void glBindVertexArray(GLuint array);
 void glVertexAttribPointer(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void* pointer);
+void glEnableVertexAttribArray(GLuint index); // Doesn't do anything, here for backwards compatibility
 
 /*
 * BUFFER FUNCTION DECLS
@@ -116,5 +117,9 @@ void glUniform3f(GLint location, GLfloat v0, GLfloat v1, GLfloat v2);
 void glUniform4f(GLint location, GLfloat v0, GLfloat v1, GLfloat v2, GLfloat v3);
 
 void glUniform1i(GLint location, GLint v0);
+
+void glUniformMatrix2fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat* value);
+void glUniformMatrix3fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat* value);
+void glUniformMatrix4fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat* value);
 
 #endif // SOFTWARE_GL_H
