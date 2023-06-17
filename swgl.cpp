@@ -207,38 +207,23 @@ int ClipTriangleAgainstNearPlane(Triangle& tri, Triangle *outTri)
 		OutsidePoints[nOutsidePointCount++] = &tri.Verts[2];
 	}
 
-	// Now classify triangle points, and break the input triangle into 
-	// smaller output triangles if required. There are four possible
-	// outcomes...
-
 	if (nInsidePointCount == 0)
 	{
-		// All points lie on the outside of plane, so clip whole triangle
-		// It ceases to exist
-
-		return 0; // No returned triangles are valid
+		return 0;
 	}
 
 	if (nInsidePointCount == 3)
 	{
-		// All points lie on the inside of plane, so do nothing
-		// and allow the triangle to simply pass through
 		outTri[0] = tri;
 
-		return 1; // Just the one returned original triangle is valid
+		return 1;
 	}
 
 	if (nInsidePointCount == 1 && nOutsidePointCount == 2)
 	{
-		// Triangle should be clipped. As two points lie outside
-		// the plane, the triangle simply becomes a smaller triangle
-
-		// The inside point is valid, so keep that...
 		outTri[0].Verts[0] = *InsidePoints[0];
 		outTri[0].TriangleVertexData[0] = InExValues[0];
 
-		// but the two new points are at the locations where the 
-		// original sides of the triangle (lines) intersect with the plane
 		float t;
 		outTri[0].Verts[1] = IntersectNearPlane(*InsidePoints[0], *OutsidePoints[0], t);
 		for (int i = 0; i < tri.TriangleVertexData[1].size(); i++)
@@ -252,7 +237,7 @@ int ClipTriangleAgainstNearPlane(Triangle& tri, Triangle *outTri)
 			outTri[0].TriangleVertexData[2][i].first = InterpolateExValue(InExValues[0][i].first, OutExValues[1][i].first, t);
 		}
 
-		return 1; // Return the newly formed single triangle
+		return 1;
 	}
 
 	if (nInsidePointCount == 2 && nOutsidePointCount == 1)
@@ -269,9 +254,6 @@ int ClipTriangleAgainstNearPlane(Triangle& tri, Triangle *outTri)
 			outTri[0].TriangleVertexData[2][i].first = InterpolateExValue(InExValues[0][i].first, OutExValues[0][i].first, t);
 		}
 
-		// The second triangle is composed of one of he inside points, a
-		// new point determined by the intersection of the other side of the 
-		// triangle and the plane, and the newly created point above
 		outTri[1].Verts[0] = *InsidePoints[1];
 		outTri[1].TriangleVertexData[0] = InExValues[1];
 		outTri[1].Verts[1] = outTri[0].Verts[2];
@@ -282,7 +264,7 @@ int ClipTriangleAgainstNearPlane(Triangle& tri, Triangle *outTri)
 			outTri[1].TriangleVertexData[2][i].first = InterpolateExValue(InExValues[1][i].first, OutExValues[0][i].first, t);
 		}
 
-		return 2; // Return two newly formed triangles which form a quad
+		return 2;
 	}
 }
 
