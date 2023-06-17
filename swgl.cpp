@@ -41,6 +41,343 @@ enum glslTokenType
 	GLSL_TOK_INT_CONSTRUCT
 };
 
+struct glslMat4
+{
+	float m00;
+	float m01;
+	float m02;
+	float m03;
+
+	float m10;
+	float m11;
+	float m12;
+	float m13;
+
+	float m20;
+	float m21;
+	float m22;
+	float m23;
+
+	float m30;
+	float m31;
+	float m32;
+	float m33;
+};
+
+struct glslMat3
+{
+	float m00;
+	float m01;
+	float m02;
+
+	float m10;
+	float m11;
+	float m12;
+
+	float m20;
+	float m21;
+	float m22;
+};
+
+struct glslMat2
+{
+	float m00;
+	float m01;
+
+	float m10;
+	float m11;
+};
+
+struct glslVec4
+{
+	float x;
+	float y;
+	float z;
+	float w;
+};
+
+struct glslVec3
+{
+	float x;
+	float y;
+	float z;
+};
+
+struct glslVec2
+{
+	float x;
+	float y;
+};
+
+struct glslExValue
+{
+	glslType Type;
+
+	float x;
+	float y;
+	float z;
+	float w;
+
+	int i;
+
+	glslMat2 Mat2;
+	glslMat3 Mat3;
+	glslMat4 Mat4;
+};
+
+struct glslVariable;
+
+struct Triangle
+{
+	glslVec4 Verts[3];
+	std::vector<std::pair<glslExValue, glslVariable*>> TriangleVertexData[3];
+};
+
+glslVec4 IntersectNearPlane(glslVec4 a, glslVec4 b, float &t)
+{
+	t = (a.w + a.z) / ((a.w + a.z) - (b.w + b.z));
+
+	return { a.x + t * (b.x - a.x), a.y + t * (b.y - a.y), a.z + t * (b.z - a.z), a.w + t * (b.w - a.w) };
+}
+
+glslExValue InterpolateExValue(glslExValue Val0, glslExValue Val1, float t)
+{
+	if (Val0.Type == GLSL_FLOAT)
+	{
+		return { GLSL_FLOAT, Val0.x + t * (Val1.x - Val0.x) };
+	}
+	if (Val0.Type == GLSL_VEC2)
+	{
+		return { GLSL_VEC2, Val0.x + t * (Val1.x - Val0.x), Val0.y + t * (Val1.y - Val0.y) };
+	}
+	if (Val0.Type == GLSL_VEC3)
+	{
+		return { GLSL_VEC3, Val0.x + t * (Val1.x - Val0.x), Val0.y + t * (Val1.y - Val0.y), Val0.z + t * (Val1.z - Val0.z) };
+	}
+	if (Val0.Type == GLSL_VEC4)
+	{
+		return { GLSL_VEC4, Val0.x + t * (Val1.x - Val0.x), Val0.y + t * (Val1.y - Val0.y), Val0.z + t * (Val1.z - Val0.z), Val0.w + t * (Val1.w - Val0.w) };
+	}
+	if (Val0.Type == GLSL_INT)
+	{
+		return { GLSL_INT, 0.0f, 0.0f, 0.0f, 0.0f, (int)(Val0.i + t * (Val1.i - Val0.i)) };
+	}
+}
+
+int ClipTriangleAgainstNearPlane(Triangle& tri, Triangle *outTri) 
+{
+	outTri[0] = tri;
+	outTri[1] = tri;
+
+	// Create two temporary storage arrays to classify points either side of plane
+	// If distance sign is positive, point lies on "inside" of plane
+	glslVec4* InsidePoints[3];  int nInsidePointCount = 0;
+	std::vector<std::pair<glslExValue, glslVariable*>> InExValues[3];
+	glslVec4* OutsidePoints[3]; int nOutsidePointCount = 0;
+	std::vector<std::pair<glslExValue, glslVariable*>> OutExValues[3];
+
+	if (tri.Verts[0].z >= -tri.Verts[0].w)
+	{
+		InExValues[nInsidePointCount] = tri.TriangleVertexData[0];
+		InsidePoints[nInsidePointCount++] = &tri.Verts[0];
+	}
+	else 
+	{
+		OutExValues[nOutsidePointCount] = tri.TriangleVertexData[0];
+		OutsidePoints[nOutsidePointCount++] = &tri.Verts[0];
+	}
+	if (tri.Verts[1].z >= -tri.Verts[1].w)
+	{
+		InExValues[nInsidePointCount] = tri.TriangleVertexData[1];
+		InsidePoints[nInsidePointCount++] = &tri.Verts[1];
+	}
+	else 
+	{
+		OutExValues[nOutsidePointCount] = tri.TriangleVertexData[1];
+		OutsidePoints[nOutsidePointCount++] = &tri.Verts[1];
+	}
+	if (tri.Verts[2].z >= -tri.Verts[2].w)
+	{
+		InExValues[nInsidePointCount] = tri.TriangleVertexData[2];
+		InsidePoints[nInsidePointCount++] = &tri.Verts[2];
+	}
+	else 
+	{
+		OutExValues[nOutsidePointCount] = tri.TriangleVertexData[2];
+		OutsidePoints[nOutsidePointCount++] = &tri.Verts[2];
+	}
+
+	// Now classify triangle points, and break the input triangle into 
+	// smaller output triangles if required. There are four possible
+	// outcomes...
+
+	if (nInsidePointCount == 0)
+	{
+		// All points lie on the outside of plane, so clip whole triangle
+		// It ceases to exist
+
+		return 0; // No returned triangles are valid
+	}
+
+	if (nInsidePointCount == 3)
+	{
+		// All points lie on the inside of plane, so do nothing
+		// and allow the triangle to simply pass through
+		outTri[0] = tri;
+
+		return 1; // Just the one returned original triangle is valid
+	}
+
+	if (nInsidePointCount == 1 && nOutsidePointCount == 2)
+	{
+		// Triangle should be clipped. As two points lie outside
+		// the plane, the triangle simply becomes a smaller triangle
+
+		// The inside point is valid, so keep that...
+		outTri[0].Verts[0] = *InsidePoints[0];
+		outTri[0].TriangleVertexData[0] = InExValues[0];
+
+		// but the two new points are at the locations where the 
+		// original sides of the triangle (lines) intersect with the plane
+		float t;
+		outTri[0].Verts[1] = IntersectNearPlane(*InsidePoints[0], *OutsidePoints[0], t);
+		for (int i = 0; i < tri.TriangleVertexData[1].size(); i++)
+		{
+			outTri[0].TriangleVertexData[1][i].first = InterpolateExValue(InExValues[0][i].first, OutExValues[0][i].first, t);
+		}
+
+		outTri[0].Verts[2] = IntersectNearPlane(*InsidePoints[0], *OutsidePoints[1], t);
+		for (int i = 0; i < tri.TriangleVertexData[2].size(); i++)
+		{
+			outTri[0].TriangleVertexData[2][i].first = InterpolateExValue(InExValues[0][i].first, OutExValues[1][i].first, t);
+		}
+
+		return 1; // Return the newly formed single triangle
+	}
+
+	if (nInsidePointCount == 2 && nOutsidePointCount == 1)
+	{
+		outTri[0].Verts[0] = *InsidePoints[0];
+		outTri[0].TriangleVertexData[0] = InExValues[0];
+		outTri[0].Verts[1] = *InsidePoints[1];
+		outTri[0].TriangleVertexData[1] = InExValues[1];
+
+		float t;
+		outTri[0].Verts[2] = IntersectNearPlane(*InsidePoints[0], *OutsidePoints[0], t);
+		for (int i = 0; i < tri.TriangleVertexData[2].size(); i++)
+		{
+			outTri[0].TriangleVertexData[2][i].first = InterpolateExValue(InExValues[0][i].first, OutExValues[0][i].first, t);
+		}
+
+		// The second triangle is composed of one of he inside points, a
+		// new point determined by the intersection of the other side of the 
+		// triangle and the plane, and the newly created point above
+		outTri[1].Verts[0] = *InsidePoints[1];
+		outTri[1].TriangleVertexData[0] = InExValues[1];
+		outTri[1].Verts[1] = outTri[0].Verts[2];
+		outTri[1].TriangleVertexData[1] = outTri[0].TriangleVertexData[2];
+		outTri[1].Verts[2] = IntersectNearPlane(*InsidePoints[1], *OutsidePoints[0], t);
+		for (int i = 0; i < tri.TriangleVertexData[2].size(); i++)
+		{
+			outTri[1].TriangleVertexData[2][i].first = InterpolateExValue(InExValues[1][i].first, OutExValues[0][i].first, t);
+		}
+
+		return 2; // Return two newly formed triangles which form a quad
+	}
+}
+
+glslMat4 MatMul(const glslMat4& a, const glslMat4& b) 
+{
+	glslMat4 result;
+
+	result.m00 = a.m00 * b.m00 + a.m01 * b.m10 + a.m02 * b.m20 + a.m03 * b.m30;
+	result.m01 = a.m00 * b.m01 + a.m01 * b.m11 + a.m02 * b.m21 + a.m03 * b.m31;
+	result.m02 = a.m00 * b.m02 + a.m01 * b.m12 + a.m02 * b.m22 + a.m03 * b.m32;
+	result.m03 = a.m00 * b.m03 + a.m01 * b.m13 + a.m02 * b.m23 + a.m03 * b.m33;
+
+	result.m10 = a.m10 * b.m00 + a.m11 * b.m10 + a.m12 * b.m20 + a.m13 * b.m30;
+	result.m11 = a.m10 * b.m01 + a.m11 * b.m11 + a.m12 * b.m21 + a.m13 * b.m31;
+	result.m12 = a.m10 * b.m02 + a.m11 * b.m12 + a.m12 * b.m22 + a.m13 * b.m32;
+	result.m13 = a.m10 * b.m03 + a.m11 * b.m13 + a.m12 * b.m23 + a.m13 * b.m33;
+
+	result.m20 = a.m20 * b.m00 + a.m21 * b.m10 + a.m22 * b.m20 + a.m23 * b.m30;
+	result.m21 = a.m20 * b.m01 + a.m21 * b.m11 + a.m22 * b.m21 + a.m23 * b.m31;
+	result.m22 = a.m20 * b.m02 + a.m21 * b.m12 + a.m22 * b.m22 + a.m23 * b.m32;
+	result.m23 = a.m20 * b.m03 + a.m21 * b.m13 + a.m22 * b.m23 + a.m23 * b.m33;
+
+	result.m30 = a.m30 * b.m00 + a.m31 * b.m10 + a.m32 * b.m20 + a.m33 * b.m30;
+	result.m31 = a.m30 * b.m01 + a.m31 * b.m11 + a.m32 * b.m21 + a.m33 * b.m31;
+	result.m32 = a.m30 * b.m02 + a.m31 * b.m12 + a.m32 * b.m22 + a.m33 * b.m32;
+	result.m33 = a.m30 * b.m03 + a.m31 * b.m13 + a.m32 * b.m23 + a.m33 * b.m33;
+
+	return result;
+}
+
+glslMat3 MatMul(const glslMat3& a, const glslMat3& b) 
+{
+	glslMat3 result;
+
+	result.m00 = a.m00 * b.m00 + a.m01 * b.m10 + a.m02 * b.m20;
+	result.m01 = a.m00 * b.m01 + a.m01 * b.m11 + a.m02 * b.m21;
+	result.m02 = a.m00 * b.m02 + a.m01 * b.m12 + a.m02 * b.m22;
+
+	result.m10 = a.m10 * b.m00 + a.m11 * b.m10 + a.m12 * b.m20;
+	result.m11 = a.m10 * b.m01 + a.m11 * b.m11 + a.m12 * b.m21;
+	result.m12 = a.m10 * b.m02 + a.m11 * b.m12 + a.m12 * b.m22;
+
+	result.m20 = a.m20 * b.m00 + a.m21 * b.m10 + a.m22 * b.m20;
+	result.m21 = a.m20 * b.m01 + a.m21 * b.m11 + a.m22 * b.m21;
+	result.m22 = a.m20 * b.m02 + a.m21 * b.m12 + a.m22 * b.m22;
+
+	return result;
+}
+
+glslMat2 MatMul(const glslMat2& a, const glslMat2& b) 
+{
+	glslMat2 result;
+
+	result.m00 = a.m00 * b.m00 + a.m01 * b.m10;
+	result.m01 = a.m00 * b.m01 + a.m01 * b.m11;
+
+	result.m10 = a.m10 * b.m00 + a.m11 * b.m10;
+	result.m11 = a.m10 * b.m01 + a.m11 * b.m11;
+
+	return result;
+}
+
+glslVec4 MatMul(const glslMat4& mat, const glslVec4& vec) 
+{
+	glslVec4 result;
+
+	result.x = mat.m00 * vec.x + mat.m01 * vec.y + mat.m02 * vec.z + mat.m03 * vec.w;
+	result.y = mat.m10 * vec.x + mat.m11 * vec.y + mat.m12 * vec.z + mat.m13 * vec.w;
+	result.z = mat.m20 * vec.x + mat.m21 * vec.y + mat.m22 * vec.z + mat.m23 * vec.w;
+	result.w = mat.m30 * vec.x + mat.m31 * vec.y + mat.m32 * vec.z + mat.m33 * vec.w;
+
+	return result;
+}
+
+glslVec3 MatMul(const glslMat3& mat, const glslVec3& vec) 
+{
+	glslVec3 result;
+
+	result.x = mat.m00 * vec.x + mat.m01 * vec.y + mat.m02 * vec.z;
+	result.y = mat.m10 * vec.x + mat.m11 * vec.y + mat.m12 * vec.z;
+	result.z = mat.m20 * vec.x + mat.m21 * vec.y + mat.m22 * vec.z;
+
+	return result;
+}
+
+glslVec2 MatMul(const glslMat2& mat, const glslVec2& vec) 
+{
+	glslVec2 result;
+
+	result.x = mat.m00 * vec.x + mat.m01 * vec.y;
+	result.y = mat.m10 * vec.x + mat.m11 * vec.y;
+
+	return result;
+}
+
 glslType GetTypeFromStr(std::string Type)
 {
 	if (Type == "vec2") return GLSL_VEC2;
@@ -612,16 +949,17 @@ public:
 		glslTokenType OpType;
 		std::pair<int, int> NextOperator = TellNextOperator(&OpType);
 
+		bool Uninitialized = false;
 		if (NextOperator.first >= NextSemi)
 		{
-			return TokenizeSubExpr(Scope, NextSemi);
+			Uninitialized = true;
 		}
 
 		glslType DeclType = GetTypeFromStr(TellStringUntil(NextBlank));
 
 		if (DeclType != GLSL_UNKNOWN)
 		{
-			if (OpType != GLSL_TOK_ASSIGN)
+			if (OpType != GLSL_TOK_ASSIGN && !Uninitialized)
 			{
 				printf("SWGL: FATAL! Variable declaration must have = be the first operator!\n");
 				return 0;
@@ -633,7 +971,7 @@ public:
 		}
 
 		glslToken* OutToken = new glslToken;
-		OutToken->Type = GLSL_TOK_VAR_DECL;
+		OutToken->Type = Uninitialized ? GLSL_TOK_VAR : GLSL_TOK_VAR_DECL;
 
 
 		if (DeclType == GLSL_UNKNOWN)
@@ -645,16 +983,17 @@ public:
 		At = NextBlank + 1;
 		NextBlank = TellNext(' ');
 
-		std::string DeclName = TellStringUntilNWS(NextOperator.first);
+		std::string DeclName = TellStringUntilNWS(std::min(NextOperator.first, NextSemi));
 
 		glslVariable* DeclVar = new glslVariable;
 
 		DeclVar->Name = DeclName;
 		DeclVar->Type = DeclType;
 		Scope->Variables.push_back(DeclVar);
-		
-		if (NextOperator.first == 0x7FFFFFFF)
+
+		if (NextOperator.first > NextSemi)
 		{
+			At = NextSemi + 1;
 			return 0;
 		}
 
@@ -954,8 +1293,8 @@ public:
 		int NextBlank = TellNext(' ');
 		int NextParen = TellNext('(');
 
-		std::string BlankStr = TellStringUntil(NextBlank);
-		std::string ParenStr = TellStringUntil(NextParen);
+		std::string BlankStr = TellStringUntilNWS(NextBlank);
+		std::string ParenStr = TellStringUntilNWS(NextParen);
 
 		if (BlankStr == "uniform")
 		{
@@ -1022,18 +1361,6 @@ struct RawShader
 
 std::vector<RawShader*> GlobalShaders;
 
-struct glslExValue
-{
-	glslType Type;
-
-	float x;
-	float y;
-	float z;
-	float w;
-
-	int i;
-};
-
 void VerifyVar(glslVariable* Var)
 {
 	if (Var->Value.Alloc) return;
@@ -1043,6 +1370,9 @@ void VerifyVar(glslVariable* Var)
 	else if (Var->Type == GLSL_VEC3) Var->Value.Data = malloc(sizeof(float) * 3);
 	else if (Var->Type == GLSL_VEC4) Var->Value.Data = malloc(sizeof(float) * 4);
 	else if (Var->Type == GLSL_INT) Var->Value.Data = malloc(sizeof(int));
+	else if (Var->Type == GLSL_MAT2) Var->Value.Data = malloc(sizeof(float) * 4);
+	else if (Var->Type == GLSL_MAT3) Var->Value.Data = malloc(sizeof(float) * 9);
+	else if (Var->Type == GLSL_MAT4) Var->Value.Data = malloc(sizeof(float) * 16);
 	Var->Value.Alloc = true;
 }
 
@@ -1085,6 +1415,47 @@ void AssignToExVal(glslVariable* AssignTo, glslExValue Val)
 	else if (Val.Type == GLSL_INT)
 	{
 		((int*)AssignTo->Value.Data)[0] = Val.i;
+	}
+
+	else if (Val.Type == GLSL_MAT2)
+	{
+		((float*)AssignTo->Value.Data)[0] = Val.Mat2.m00;
+		((float*)AssignTo->Value.Data)[1] = Val.Mat2.m01;
+		((float*)AssignTo->Value.Data)[2] = Val.Mat2.m10;
+		((float*)AssignTo->Value.Data)[3] = Val.Mat2.m11;
+	}
+
+	else if (Val.Type == GLSL_MAT3)
+	{
+		((float*)AssignTo->Value.Data)[0] = Val.Mat3.m00;
+		((float*)AssignTo->Value.Data)[1] = Val.Mat3.m01;
+		((float*)AssignTo->Value.Data)[2] = Val.Mat3.m02;
+		((float*)AssignTo->Value.Data)[3] = Val.Mat3.m10;
+		((float*)AssignTo->Value.Data)[4] = Val.Mat3.m11;
+		((float*)AssignTo->Value.Data)[5] = Val.Mat3.m12;
+		((float*)AssignTo->Value.Data)[6] = Val.Mat3.m20;
+		((float*)AssignTo->Value.Data)[7] = Val.Mat3.m21;
+		((float*)AssignTo->Value.Data)[8] = Val.Mat3.m22;
+	}
+
+	else if (Val.Type == GLSL_MAT4)
+	{
+		((float*)AssignTo->Value.Data)[0] = Val.Mat4.m00;
+		((float*)AssignTo->Value.Data)[1] = Val.Mat4.m01;
+		((float*)AssignTo->Value.Data)[2] = Val.Mat4.m02;
+		((float*)AssignTo->Value.Data)[3] = Val.Mat4.m03;
+		((float*)AssignTo->Value.Data)[4] = Val.Mat4.m10;
+		((float*)AssignTo->Value.Data)[5] = Val.Mat4.m11;
+		((float*)AssignTo->Value.Data)[6] = Val.Mat4.m12;
+		((float*)AssignTo->Value.Data)[7] = Val.Mat4.m13;
+		((float*)AssignTo->Value.Data)[8] = Val.Mat4.m20;
+		((float*)AssignTo->Value.Data)[9] = Val.Mat4.m21;
+		((float*)AssignTo->Value.Data)[10] = Val.Mat4.m22;
+		((float*)AssignTo->Value.Data)[11] = Val.Mat4.m23;
+		((float*)AssignTo->Value.Data)[12] = Val.Mat4.m30;
+		((float*)AssignTo->Value.Data)[13] = Val.Mat4.m31;
+		((float*)AssignTo->Value.Data)[14] = Val.Mat4.m32;
+		((float*)AssignTo->Value.Data)[15] = Val.Mat4.m33;
 	}
 }
 
@@ -1138,6 +1509,24 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 		else if (Token->Var->Type == GLSL_VEC3) return { GLSL_VEC3, ((float*)Token->Var->Value.Data)[0], ((float*)Token->Var->Value.Data)[1], ((float*)Token->Var->Value.Data)[2] };
 		else if (Token->Var->Type == GLSL_VEC4) return { GLSL_VEC4, ((float*)Token->Var->Value.Data)[0], ((float*)Token->Var->Value.Data)[1], ((float*)Token->Var->Value.Data)[2], ((float*)Token->Var->Value.Data)[3] };
 		else if (Token->Var->Type == GLSL_INT) return { GLSL_INT, 0.0f, 0.0f, 0.0f, 0.0f, ((int*)Token->Var->Value.Data)[0] };
+		else
+		{
+			if (Token->Var->Type == GLSL_MAT2) return { GLSL_MAT2, 0.0f, 0.0f, 0.0f, 0.0f, 0, 
+				{ ((float*)Token->Var->Value.Data)[0], ((float*)Token->Var->Value.Data)[1],
+				  ((float*)Token->Var->Value.Data)[2], ((float*)Token->Var->Value.Data)[3] }
+			};
+			if (Token->Var->Type == GLSL_MAT3) return { GLSL_MAT3, 0.0f, 0.0f, 0.0f, 0.0f, 0, {}, 
+				{ ((float*)Token->Var->Value.Data)[0], ((float*)Token->Var->Value.Data)[1], ((float*)Token->Var->Value.Data)[2],
+				  ((float*)Token->Var->Value.Data)[3], ((float*)Token->Var->Value.Data)[4], ((float*)Token->Var->Value.Data)[5], 
+				  ((float*)Token->Var->Value.Data)[6], ((float*)Token->Var->Value.Data)[7], ((float*)Token->Var->Value.Data)[8] }
+			};
+			if (Token->Var->Type == GLSL_MAT4) return { GLSL_MAT4, 0.0f, 0.0f, 0.0f, 0.0f, 0, {}, {},
+				{ ((float*)Token->Var->Value.Data)[0], ((float*)Token->Var->Value.Data)[1], ((float*)Token->Var->Value.Data)[2], ((float*)Token->Var->Value.Data)[3],
+				  ((float*)Token->Var->Value.Data)[4], ((float*)Token->Var->Value.Data)[5], ((float*)Token->Var->Value.Data)[6], ((float*)Token->Var->Value.Data)[7],
+				  ((float*)Token->Var->Value.Data)[8], ((float*)Token->Var->Value.Data)[9], ((float*)Token->Var->Value.Data)[10], ((float*)Token->Var->Value.Data)[11],
+				  ((float*)Token->Var->Value.Data)[12], ((float*)Token->Var->Value.Data)[13], ((float*)Token->Var->Value.Data)[14], ((float*)Token->Var->Value.Data)[15] }
+			};
+		}
 	}
 	else if (Token->Type == GLSL_TOK_CONST)
 	{
@@ -1179,6 +1568,51 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 		FirstResult.w += SecondResult.w;
 		FirstResult.i += SecondResult.i;
 
+		if (FirstResult.Type == GLSL_MAT2)
+		{
+			FirstResult.Mat2.m00 += SecondResult.Mat2.m00;
+			FirstResult.Mat2.m01 += SecondResult.Mat2.m01;
+
+			FirstResult.Mat2.m10 += SecondResult.Mat2.m10;
+			FirstResult.Mat2.m11 += SecondResult.Mat2.m11;
+		}
+		else if (FirstResult.Type == GLSL_MAT3)
+		{
+			FirstResult.Mat3.m00 += SecondResult.Mat3.m00;
+			FirstResult.Mat3.m01 += SecondResult.Mat3.m01;
+			FirstResult.Mat3.m02 += SecondResult.Mat3.m02;
+
+			FirstResult.Mat3.m10 += SecondResult.Mat3.m10;
+			FirstResult.Mat3.m11 += SecondResult.Mat3.m11;
+			FirstResult.Mat3.m12 += SecondResult.Mat3.m12;
+
+			FirstResult.Mat3.m20 += SecondResult.Mat3.m20;
+			FirstResult.Mat3.m21 += SecondResult.Mat3.m21;
+			FirstResult.Mat3.m22 += SecondResult.Mat3.m22;
+		}
+		else if (FirstResult.Type == GLSL_MAT4)
+		{
+			FirstResult.Mat4.m00 += SecondResult.Mat4.m00;
+			FirstResult.Mat4.m01 += SecondResult.Mat4.m01;
+			FirstResult.Mat4.m02 += SecondResult.Mat4.m02;
+			FirstResult.Mat4.m03 += SecondResult.Mat4.m02;
+
+			FirstResult.Mat4.m10 += SecondResult.Mat4.m10;
+			FirstResult.Mat4.m11 += SecondResult.Mat4.m11;
+			FirstResult.Mat4.m12 += SecondResult.Mat4.m12;
+			FirstResult.Mat4.m13 += SecondResult.Mat4.m12;
+
+			FirstResult.Mat4.m20 += SecondResult.Mat4.m20;
+			FirstResult.Mat4.m21 += SecondResult.Mat4.m21;
+			FirstResult.Mat4.m22 += SecondResult.Mat4.m22;
+			FirstResult.Mat4.m23 += SecondResult.Mat4.m22;
+
+			FirstResult.Mat4.m30 += SecondResult.Mat4.m30;
+			FirstResult.Mat4.m31 += SecondResult.Mat4.m31;
+			FirstResult.Mat4.m32 += SecondResult.Mat4.m32;
+			FirstResult.Mat4.m33 += SecondResult.Mat4.m33;
+		}
+
 		return FirstResult;
 	}
 	else if (Token->Type == GLSL_TOK_SUB)
@@ -1198,6 +1632,51 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 		FirstResult.w -= SecondResult.w;
 		FirstResult.i -= SecondResult.i;
 
+		if (FirstResult.Type == GLSL_MAT2)
+		{
+			FirstResult.Mat2.m00 -= SecondResult.Mat2.m00;
+			FirstResult.Mat2.m01 -= SecondResult.Mat2.m01;
+
+			FirstResult.Mat2.m10 -= SecondResult.Mat2.m10;
+			FirstResult.Mat2.m11 -= SecondResult.Mat2.m11;
+		}
+		else if (FirstResult.Type == GLSL_MAT3)
+		{
+			FirstResult.Mat3.m00 -= SecondResult.Mat3.m00;
+			FirstResult.Mat3.m01 -= SecondResult.Mat3.m01;
+			FirstResult.Mat3.m02 -= SecondResult.Mat3.m02;
+
+			FirstResult.Mat3.m10 -= SecondResult.Mat3.m10;
+			FirstResult.Mat3.m11 -= SecondResult.Mat3.m11;
+			FirstResult.Mat3.m12 -= SecondResult.Mat3.m12;
+
+			FirstResult.Mat3.m20 -= SecondResult.Mat3.m20;
+			FirstResult.Mat3.m21 -= SecondResult.Mat3.m21;
+			FirstResult.Mat3.m22 -= SecondResult.Mat3.m22;
+		}
+		else if (FirstResult.Type == GLSL_MAT4)
+		{
+			FirstResult.Mat4.m00 -= SecondResult.Mat4.m00;
+			FirstResult.Mat4.m01 -= SecondResult.Mat4.m01;
+			FirstResult.Mat4.m02 -= SecondResult.Mat4.m02;
+			FirstResult.Mat4.m03 -= SecondResult.Mat4.m02;
+
+			FirstResult.Mat4.m10 -= SecondResult.Mat4.m10;
+			FirstResult.Mat4.m11 -= SecondResult.Mat4.m11;
+			FirstResult.Mat4.m12 -= SecondResult.Mat4.m12;
+			FirstResult.Mat4.m13 -= SecondResult.Mat4.m12;
+
+			FirstResult.Mat4.m20 -= SecondResult.Mat4.m20;
+			FirstResult.Mat4.m21 -= SecondResult.Mat4.m21;
+			FirstResult.Mat4.m22 -= SecondResult.Mat4.m22;
+			FirstResult.Mat4.m23 -= SecondResult.Mat4.m22;
+
+			FirstResult.Mat4.m30 -= SecondResult.Mat4.m30;
+			FirstResult.Mat4.m31 -= SecondResult.Mat4.m31;
+			FirstResult.Mat4.m32 -= SecondResult.Mat4.m32;
+			FirstResult.Mat4.m33 -= SecondResult.Mat4.m33;
+		}
+
 		return FirstResult;
 	}
 	else if (Token->Type == GLSL_TOK_MUL)
@@ -1205,17 +1684,59 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 		glslExValue FirstResult = ExecuteGLSLToken(Token->First);
 		glslExValue SecondResult = ExecuteGLSLToken(Token->Second);
 
-		if (FirstResult.Type != SecondResult.Type)
+		if (FirstResult.Type != GLSL_MAT2 && FirstResult.Type != GLSL_MAT3 && FirstResult.Type != GLSL_MAT4)
 		{
-			printf("SWGL: ERROR! Type mismatch while executing shader (MULTIPLY)!\n");
-			return {};
+			if (FirstResult.Type != SecondResult.Type)
+			{
+				printf("SWGL: ERROR! Type mismatch while executing shader (MULTIPLY)!\n");
+				return {};
+			}
+			FirstResult.x *= SecondResult.x;
+			FirstResult.y *= SecondResult.y;
+			FirstResult.z *= SecondResult.z;
+			FirstResult.w *= SecondResult.w;
+			FirstResult.i *= SecondResult.i;
+		}
+		else
+		{
+			if (FirstResult.Type == GLSL_MAT2 && SecondResult.Type == GLSL_MAT2)
+			{
+				FirstResult.Mat2 = MatMul(FirstResult.Mat2, SecondResult.Mat2);
+			}
+			else if (FirstResult.Type == GLSL_MAT2 && SecondResult.Type == GLSL_VEC2)
+			{
+				glslVec2 Result = MatMul(FirstResult.Mat2, glslVec2{ SecondResult.x, SecondResult.y });
+				FirstResult.x = Result.x;
+				FirstResult.y = Result.y;
+				FirstResult.Type = GLSL_VEC2;
+			}
+			else if (FirstResult.Type == GLSL_MAT3 && SecondResult.Type == GLSL_MAT3)
+			{
+				FirstResult.Mat2 = MatMul(FirstResult.Mat2, SecondResult.Mat2);
+			}
+			else if (FirstResult.Type == GLSL_MAT3 && SecondResult.Type == GLSL_VEC3)
+			{
+				glslVec3 Result = MatMul(FirstResult.Mat3, glslVec3{ SecondResult.x, SecondResult.y, SecondResult.z });
+				FirstResult.x = Result.x;
+				FirstResult.y = Result.y;
+				FirstResult.z = Result.z;
+				FirstResult.Type = GLSL_VEC3;
+			}
+			else if (FirstResult.Type == GLSL_MAT4 && SecondResult.Type == GLSL_MAT4)
+			{
+				FirstResult.Mat4 = MatMul(FirstResult.Mat4, SecondResult.Mat4);
+			}
+			else if (FirstResult.Type == GLSL_MAT4 && SecondResult.Type == GLSL_VEC4)
+			{
+				glslVec4 Result = MatMul(FirstResult.Mat4, glslVec4{ SecondResult.x, SecondResult.y, SecondResult.z, SecondResult.w });
+				FirstResult.x = Result.x;
+				FirstResult.y = Result.y;
+				FirstResult.z = Result.z;
+				FirstResult.w = Result.w;
+				FirstResult.Type = GLSL_VEC4;
+			}
 		}
 
-		FirstResult.x *= SecondResult.x;
-		FirstResult.y *= SecondResult.y;
-		FirstResult.z *= SecondResult.z;
-		FirstResult.w *= SecondResult.w;
-		FirstResult.i *= SecondResult.i;
 
 		return FirstResult;
 	}
@@ -1414,7 +1935,6 @@ void glCompileShader(GLuint shader)
 void glDeleteShader(GLuint shader)
 {
 	delete GlobalShaders[shader];
-	GlobalShaders.erase(GlobalShaders.begin() + shader);
 }
 
 struct Program
@@ -1435,14 +1955,14 @@ std::vector<Program*> GlobalPrograms;
 
 GLuint glCreateProgram()
 {
-	GLuint CurSize = GlobalPrograms.size();
+	GLuint CurSize = GlobalPrograms.size() + 1;
 	GlobalPrograms.push_back(new Program);
 	return CurSize;
 }
 
 void glAttachShader(GLuint program, GLuint shader)
 {
-	Program* MyProgram = GlobalPrograms[program];
+	Program* MyProgram = GlobalPrograms[program - 1];
 	RawShader* MyShader = GlobalShaders[shader];
 
 	if (MyShader->Type == GL_VERTEX_SHADER)
@@ -1459,7 +1979,7 @@ void glAttachShader(GLuint program, GLuint shader)
 
 void glLinkProgram(GLuint program)
 {
-	Program* MyProgram = GlobalPrograms[program];
+	Program* MyProgram = GlobalPrograms[program - 1];
 
 	if (!MyProgram->HasFrag || !MyProgram->HasVertex)
 	{
@@ -1517,7 +2037,8 @@ void glLinkProgram(GLuint program)
 
 void glUseProgram(GLuint program)
 {
-	ActiveProgram = GlobalPrograms[program];
+	if (program == 0) ActiveProgram = 0;
+	else ActiveProgram = GlobalPrograms[program - 1];
 }
 
 struct Buffer
@@ -1550,14 +2071,15 @@ std::vector<VertexArray*> GlobalVertexArrays;
 GLuint glGenVertexArrays(GLsizei n, GLuint* arrays)
 {
 	// Only supports one vertex array per call for now
-	*arrays = GlobalVertexArrays.size();
+	*arrays = GlobalVertexArrays.size() + 1;
 	GlobalVertexArrays.push_back(new VertexArray{ std::vector<VertexArrayAttrib>(), new Buffer(), new Buffer() });
 	return 0;
 }
 
 void glBindVertexArray(GLuint array)
 {
-	ActiveVertexArray = GlobalVertexArrays[array];
+	if (array == 0) ActiveVertexArray = 0;
+	else ActiveVertexArray = GlobalVertexArrays[array - 1];
 }
 
 void glVertexAttribPointer(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void* pointer)
@@ -1582,7 +2104,7 @@ std::vector<Buffer*> GlobalBuffers;
 GLuint glGenBuffers(GLsizei n, GLuint* buffers)
 {
 	// Only supports 1 buffer per call for now
-	*buffers = GlobalBuffers.size();
+	*buffers = GlobalBuffers.size() + 1;
 	GlobalBuffers.push_back(new Buffer{ 0, 0 });
 	return 0;
 }
@@ -1593,15 +2115,21 @@ void glBindBuffer(GLenum type, GLuint buffer)
 {
 	if (type == GL_ARRAY_BUFFER)
 	{
+		if (buffer == 0)
+		{
+			GlobalArrayBuffer = 0;
+			return;
+		}
+
 		if (ActiveVertexArray != 0)
 		{
 			GlobalArrayBuffer = ActiveVertexArray->VertexBuffer;
-			GlobalArrayBuffer->data = GlobalBuffers[buffer]->data;
-			GlobalArrayBuffer->size = GlobalBuffers[buffer]->size;
+			GlobalArrayBuffer->data = GlobalBuffers[buffer - 1]->data;
+			GlobalArrayBuffer->size = GlobalBuffers[buffer - 1]->size;
 		}
 		else
 		{
-			GlobalArrayBuffer = GlobalBuffers[buffer];
+			GlobalArrayBuffer = GlobalBuffers[buffer - 1];
 		}
 	}
 }
@@ -1706,24 +2234,24 @@ void glViewport(GLint x, GLint y, GLsizei width, GLsizei height)
 	ViewportHeight = height;
 }
 
-glslExValue ExSub(glslExValue x, glslExValue y)
+glslVec4 Sub(glslVec4 x, glslVec4 y)
 {
-	return glslExValue{ GLSL_FLOAT, x.x - y.x, x.y - y.y, x.z - y.z, x.w - y.w, x.i - y.i };
+	return glslVec4{ x.x - y.x, x.y - y.y, x.z - y.z, x.w - y.w };
 }
 
-float ExDot2(glslExValue x, glslExValue y)
+float Dot2(glslVec4 x, glslVec4 y)
 {
 	return x.x * y.x + x.y * y.y;
 }
 
-void Barycentric(glslExValue a, glslExValue b, glslExValue c, glslExValue p, float& u, float& v, float& w)
+void Barycentric(glslVec4 a, glslVec4 b, glslVec4 c, glslVec4 p, float& u, float& v, float& w)
 {
-	glslExValue v0 = ExSub(b, a), v1 = ExSub(c, a), v2 = ExSub(p, a);
-	float d00 = ExDot2(v0, v0);
-	float d01 = ExDot2(v0, v1);
-	float d11 = ExDot2(v1, v1);
-	float d20 = ExDot2(v2, v0);
-	float d21 = ExDot2(v2, v1);
+	glslVec4 v0 = Sub(b, a), v1 = Sub(c, a), v2 = Sub(p, a);
+	float d00 = Dot2(v0, v0);
+	float d01 = Dot2(v0, v1);
+	float d11 = Dot2(v1, v1);
+	float d20 = Dot2(v2, v0);
+	float d21 = Dot2(v2, v1);
 	float denom = d00 * d11 - d01 * d01;
 	v = (d11 * d20 - d01 * d21) / denom;
 	w = (d00 * d21 - d01 * d20) / denom;
@@ -1759,13 +2287,13 @@ glslExValue InterpolateLinearEx(glslExValue a, glslExValue b, glslExValue c, flo
 	return Out;
 }
 
-void DrawTriangle(glslExValue* Coords, std::vector<std::pair<glslExValue, glslVariable*>>* CoordData)
+void DrawTriangle(glslVec4* Coords, std::vector<std::pair<glslExValue, glslVariable*>>* CoordData)
 {
-	float minX = std::min(std::min(Coords[0].x, Coords[1].x), Coords[2].x);
-	float maxX = std::max(std::max(Coords[0].x, Coords[1].x), Coords[2].x);
+	float minX = std::max(std::min(std::min(Coords[0].x, Coords[1].x), Coords[2].x), (float)ViewportX);
+	float maxX = std::min(std::max(std::max(Coords[0].x, Coords[1].x), Coords[2].x), (float)ViewportX + ViewportWidth - 1);
 
-	float minY = std::min(std::min(Coords[0].y, Coords[1].y), Coords[2].y);
-	float maxY = std::max(std::max(Coords[0].y, Coords[1].y), Coords[2].y);
+	float minY = std::max(std::min(std::min(Coords[0].y, Coords[1].y), Coords[2].y), (float)ViewportY);
+	float maxY = std::min(std::max(std::max(Coords[0].y, Coords[1].y), Coords[2].y), (float)ViewportY + ViewportHeight - 1);
 
 	for (float y = minY;y <= maxY;y++)
 	{
@@ -1778,9 +2306,9 @@ void DrawTriangle(glslExValue* Coords, std::vector<std::pair<glslExValue, glslVa
 
 
 			float u, v, w;
-			Barycentric(Coords[0], Coords[1], Coords[2], glslExValue{GLSL_FLOAT, x, y, 0.0f, 0.0f, 0}, u, v, w);
+			Barycentric(Coords[0], Coords[1], Coords[2], glslVec4{ x, y, 0.0f, 0.0f }, u, v, w);
 
-			if (u > 0.0f && v > 0.0f && w > 0.0f)
+			if (u >= 0.0f && v >= 0.0f && w >= 0.0f)
 			{
 
 				float z = Coords[0].z * u + Coords[1].z * v + Coords[2].z * w;
@@ -1788,11 +2316,11 @@ void DrawTriangle(glslExValue* Coords, std::vector<std::pair<glslExValue, glslVa
 				if (GlobalFramebuffer->DepthFormat == GL_FLOAT)
 				{
 					float* CurZ = &(((float*)GlobalFramebuffer->DepthAttachment)[(int)x + (int)y * GlobalFramebuffer->Width]);
-					if (*CurZ == 0.0f || *CurZ > z)
+					if (*CurZ == 0.0f || *CurZ >= z)
 					{
 						*CurZ = z;
 
-						uint32_t* CurCol = &(GlobalFramebuffer->ColorAttachment[(int)x + (int)y * GlobalFramebuffer->Width]);
+						uint32_t* CurCol = &(GlobalFramebuffer->ColorAttachment[(int)x + (GlobalFramebuffer->Height - 1 -(int)y) * GlobalFramebuffer->Width]);
 
 						for (int i = 0; i < CoordData[0].size(); i++)
 						{
@@ -1821,11 +2349,23 @@ void DrawTriangle(glslExValue* Coords, std::vector<std::pair<glslExValue, glslVa
 						OutB = std::min(std::max(OutB, 0.0f), 1.0f);
 						OutA = std::min(std::max(OutA, 0.0f), 1.0f);
 
-						uint32_t Color = 0;
-						Color |= (int)(OutR * 255) << 24;
-						Color |= (int)(OutG * 255) << 16;
-						Color |= (int)(OutB * 255) << 8;
-						Color |= (int)(OutA * 255);
+						uint32_t Color;
+
+						if (GlobalFramebuffer->ColorFormat == GL_RGB)
+						{
+							Color = 0xFF;
+							Color |= (int)(OutR * 255) << 24;
+							Color |= (int)(OutG * 255) << 16;
+							Color |= (int)(OutB * 255) << 8;
+						}
+						else if (GlobalFramebuffer->ColorFormat == GL_RGBA)
+						{
+							Color = 0x0;
+							Color |= (int)(OutR * 255) << 24;
+							Color |= (int)(OutG * 255) << 16;
+							Color |= (int)(OutB * 255) << 8;
+							Color |= (int)(OutA * 255);
+						}
 
 						*CurCol = Color;
 					}
@@ -1879,8 +2419,8 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 
 			ExecuteGLSL(ActiveProgram->VertexShader);
 
-			int OutPosX = ((float*)glPositionVar->Value.Data)[0] * (ViewportHeight / 2) + (ViewportWidth / 2) + ViewportX;
-			int OutPosY = ((float*)glPositionVar->Value.Data)[1] * (ViewportHeight / 2) + (ViewportHeight / 2) + ViewportY;
+			int OutPosX = ((float*)glPositionVar->Value.Data)[0] / ((float*)glPositionVar->Value.Data)[3] * (ViewportHeight / 2) + (ViewportWidth / 2) + ViewportX;
+			int OutPosY = ((float*)glPositionVar->Value.Data)[1] / ((float*)glPositionVar->Value.Data)[3] * (ViewportHeight / 2) + (ViewportHeight / 2) + ViewportY;
 
 			if (OutPosX < 0 || OutPosX >= GlobalFramebuffer->Width) continue;
 			if (OutPosY < 0 || OutPosY >= GlobalFramebuffer->Height) continue;
@@ -1933,7 +2473,7 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 			{
 				if (GlobalFramebuffer->ColorFormat == GL_RGB)
 				{
-					uint32_t Color = 0;
+					uint32_t Color = 0xFF;
 					Color |= (int)(OutR * 255) << 24;
 					Color |= (int)(OutG * 255) << 16;
 					Color |= (int)(OutB * 255) << 8;
@@ -1955,7 +2495,7 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 	{
 		for (int i = first; i < first + count; i += 3)
 		{
-			glslExValue TriangleCoords[3];
+			glslVec4 TriangleCoords[3];
 
 			std::vector<std::pair<glslExValue, glslVariable*>> TriangleVertexData[3];
 
@@ -1984,12 +2524,10 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 
 				ExecuteGLSL(ActiveProgram->VertexShader);
 
-				int OutPosX = ((float*)glPositionVar->Value.Data)[0] * (ViewportHeight / 2) + (ViewportWidth / 2) + ViewportX;
-				int OutPosY = ((float*)glPositionVar->Value.Data)[1] * (ViewportHeight / 2) + (ViewportHeight / 2) + ViewportY;
-
-				TriangleCoords[j].x = OutPosX;
-				TriangleCoords[j].y = OutPosY;
+				TriangleCoords[j].x = ((float*)glPositionVar->Value.Data)[0];
+				TriangleCoords[j].y = ((float*)glPositionVar->Value.Data)[1];
 				TriangleCoords[j].z = ((float*)glPositionVar->Value.Data)[2];
+				TriangleCoords[j].w = ((float*)glPositionVar->Value.Data)[3];
 
 				TriangleVertexData[j] = std::vector<std::pair<glslExValue, glslVariable*>>();
 
@@ -2003,7 +2541,32 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 					TriangleVertexData[j].push_back({ VarToExVal(InOut.second), InOut.first });
 				}
 			}
-			DrawTriangle(TriangleCoords, TriangleVertexData);
+
+			Triangle MyTri;
+			MyTri.Verts[0] = TriangleCoords[0];
+			MyTri.Verts[1] = TriangleCoords[1];
+			MyTri.Verts[2] = TriangleCoords[2];
+			MyTri.TriangleVertexData[0] = TriangleVertexData[0];
+			MyTri.TriangleVertexData[1] = TriangleVertexData[1];
+			MyTri.TriangleVertexData[2] = TriangleVertexData[2];
+			Triangle Triangles[2];
+			int nTri = ClipTriangleAgainstNearPlane(MyTri, Triangles);
+
+			for (int k = 0;k < nTri;k++)
+			{
+				Triangle Tri = Triangles[k];
+				for (int j = 0; j < 3; j++)
+				{
+					int OutPosX = Tri.Verts[j].x / Tri.Verts[j].w * (ViewportWidth / 2) + (ViewportWidth / 2) + ViewportX;
+					int OutPosY = Tri.Verts[j].y / Tri.Verts[j].w * (ViewportHeight / 2) + (ViewportHeight / 2) + ViewportY;
+
+					TriangleCoords[j].x = OutPosX;
+					TriangleCoords[j].y = OutPosY;
+					TriangleCoords[j].z = Tri.Verts[j].z;
+				}
+
+				DrawTriangle(TriangleCoords, Tri.TriangleVertexData);
+			}
 		}
 	}
 }
@@ -2039,7 +2602,7 @@ uint32_t* glGetFramePtr()
 
 GLint glGetUniformLocation(GLuint program, const GLchar* name)
 {
-	Program* MyProgram = GlobalPrograms[program];
+	Program* MyProgram = GlobalPrograms[program - 1];
 
 	GLint i = 0;
 
@@ -2047,7 +2610,7 @@ GLint glGetUniformLocation(GLuint program, const GLchar* name)
 	{
 		if (Uniform->Name == name)
 		{
-			return (program << 16) | i;
+			return ((program - 1) << 16) | i;
 		}
 		i++;
 	}
@@ -2113,4 +2676,88 @@ void glUniform1i(GLint location, GLint v0)
 	VerifyVar(MyUniform);
 
 	AssignToExVal(MyUniform, SetVal);
+}
+
+void glUniformMatrix2fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat* value)
+{
+	transpose = !transpose;
+
+	Program* MyProgram = GlobalPrograms[location >> 16];
+
+	glslVariable* MyUniform = MyProgram->Uniforms[location & 0xFFFF];
+	VerifyVar(MyUniform);
+
+	if (!transpose) memcpy(MyUniform->Value.Data, value, sizeof(float) * 4);
+	else
+	{
+		((float*)MyUniform->Value.Data)[0] = value[0];
+		((float*)MyUniform->Value.Data)[1] = value[2];
+		((float*)MyUniform->Value.Data)[2] = value[1];
+		((float*)MyUniform->Value.Data)[3] = value[3];
+	}
+}
+
+void glUniformMatrix3fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat* value)
+{
+	transpose = !transpose;
+
+	Program* MyProgram = GlobalPrograms[location >> 16];
+
+	glslVariable* MyUniform = MyProgram->Uniforms[location & 0xFFFF];
+	VerifyVar(MyUniform);
+
+	if (!transpose) memcpy(MyUniform->Value.Data, value, sizeof(float) * 9);
+	else
+	{
+		((float*)MyUniform->Value.Data)[0] = value[0];
+		((float*)MyUniform->Value.Data)[1] = value[3];
+		((float*)MyUniform->Value.Data)[2] = value[6];
+		((float*)MyUniform->Value.Data)[3] = value[1];
+		((float*)MyUniform->Value.Data)[4] = value[4];
+		((float*)MyUniform->Value.Data)[5] = value[7];
+		((float*)MyUniform->Value.Data)[6] = value[2];
+		((float*)MyUniform->Value.Data)[7] = value[5];
+		((float*)MyUniform->Value.Data)[8] = value[8];
+	}
+}
+
+void glUniformMatrix4fv(GLint location, GLsizei count, GLboolean transpose, const GLfloat* value)
+{
+	transpose = !transpose;
+
+	Program* MyProgram = GlobalPrograms[location >> 16];
+
+	glslVariable* MyUniform = MyProgram->Uniforms[location & 0xFFFF];
+	VerifyVar(MyUniform);
+
+	if (!transpose) memcpy(MyUniform->Value.Data, value, sizeof(float) * 16);
+	else
+	{
+		((float*)MyUniform->Value.Data)[0] = value[0];
+		((float*)MyUniform->Value.Data)[1] = value[4];
+		((float*)MyUniform->Value.Data)[2] = value[8];
+		((float*)MyUniform->Value.Data)[3] = value[12];
+		((float*)MyUniform->Value.Data)[4] = value[1];
+		((float*)MyUniform->Value.Data)[5] = value[5];
+		((float*)MyUniform->Value.Data)[6] = value[9];
+		((float*)MyUniform->Value.Data)[7] = value[13];
+		((float*)MyUniform->Value.Data)[8] = value[2];
+		((float*)MyUniform->Value.Data)[9] = value[6];
+		((float*)MyUniform->Value.Data)[10] = value[10];
+		((float*)MyUniform->Value.Data)[11] = value[14];
+		((float*)MyUniform->Value.Data)[12] = value[3];
+		((float*)MyUniform->Value.Data)[13] = value[7];
+		((float*)MyUniform->Value.Data)[14] = value[11];
+		((float*)MyUniform->Value.Data)[15] = value[15];
+	}
+}
+
+/*
+* Every function below does not need to be implemented, 
+* but is here for backwards compatibility
+*/
+
+void glEnableVertexAttribArray(GLuint index)
+{
+
 }
