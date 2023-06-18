@@ -133,11 +133,17 @@ struct Triangle
 	std::vector<std::pair<glslExValue, glslVariable*>> TriangleVertexData[3];
 };
 
-glslVec4 IntersectNearPlane(glslVec4 a, glslVec4 b, float &t)
+glslVec4 IntersectNearPlane(glslVec4 a, glslVec4 b, float& t)
 {
-	t = (a.w + a.z) / ((a.w + a.z) - (b.w + b.z));
+	t = (a.z + a.w) / (a.w - b.w + a.z - b.z);
 
-	return { a.x + t * (b.x - a.x), a.y + t * (b.y - a.y), a.z + t * (b.z - a.z), a.w + t * (b.w - a.w) };
+	glslVec4 result;
+	result.x = a.x + t * (b.x - a.x);
+	result.y = a.y + t * (b.y - a.y);
+	result.z = a.z + t * (b.z - a.z);
+	result.w = a.w + t * (b.w - a.w);
+
+	return result;
 }
 
 glslExValue InterpolateExValue(glslExValue Val0, glslExValue Val1, float t)
@@ -169,8 +175,6 @@ int ClipTriangleAgainstNearPlane(Triangle& tri, Triangle *outTri)
 	outTri[0] = tri;
 	outTri[1] = tri;
 
-	// Create two temporary storage arrays to classify points either side of plane
-	// If distance sign is positive, point lies on "inside" of plane
 	glslVec4* InsidePoints[3];  int nInsidePointCount = 0;
 	std::vector<std::pair<glslExValue, glslVariable*>> InExValues[3];
 	glslVec4* OutsidePoints[3]; int nOutsidePointCount = 0;
@@ -228,6 +232,7 @@ int ClipTriangleAgainstNearPlane(Triangle& tri, Triangle *outTri)
 		outTri[0].Verts[1] = IntersectNearPlane(*InsidePoints[0], *OutsidePoints[0], t);
 		for (int i = 0; i < tri.TriangleVertexData[1].size(); i++)
 		{
+
 			outTri[0].TriangleVertexData[1][i].first = InterpolateExValue(InExValues[0][i].first, OutExValues[0][i].first, t);
 		}
 
@@ -2271,11 +2276,13 @@ glslExValue InterpolateLinearEx(glslExValue a, glslExValue b, glslExValue c, flo
 
 void DrawTriangle(glslVec4* Coords, std::vector<std::pair<glslExValue, glslVariable*>>* CoordData)
 {
+
 	float minX = std::max(std::min(std::min(Coords[0].x, Coords[1].x), Coords[2].x), (float)ViewportX);
 	float maxX = std::min(std::max(std::max(Coords[0].x, Coords[1].x), Coords[2].x), (float)ViewportX + ViewportWidth - 1);
 
 	float minY = std::max(std::min(std::min(Coords[0].y, Coords[1].y), Coords[2].y), (float)ViewportY);
 	float maxY = std::min(std::max(std::max(Coords[0].y, Coords[1].y), Coords[2].y), (float)ViewportY + ViewportHeight - 1);
+	
 
 	for (float y = minY;y <= maxY;y++)
 	{
@@ -2292,8 +2299,21 @@ void DrawTriangle(glslVec4* Coords, std::vector<std::pair<glslExValue, glslVaria
 
 			if (u >= 0.0f && v >= 0.0f && w >= 0.0f)
 			{
+				float uCorrected = u / Coords[0].w;
+				float vCorrected = v / Coords[1].w;
+				float wCorrected = w / Coords[2].w;
 
-				float z = Coords[0].z * u + Coords[1].z * v + Coords[2].z * w;
+				float sum = uCorrected + vCorrected + wCorrected;
+
+				uCorrected /= sum;
+				vCorrected /= sum;
+				wCorrected /= sum;
+
+				u = uCorrected;
+				v = vCorrected;
+				w = wCorrected;
+
+				float z = (Coords[0].z * u + Coords[1].z * v + Coords[2].z * w);
 
 				if (GlobalFramebuffer->DepthFormat == GL_FLOAT)
 				{
@@ -2303,6 +2323,7 @@ void DrawTriangle(glslVec4* Coords, std::vector<std::pair<glslExValue, glslVaria
 						*CurZ = z;
 
 						uint32_t* CurCol = &(GlobalFramebuffer->ColorAttachment[(int)x + (GlobalFramebuffer->Height - 1 -(int)y) * GlobalFramebuffer->Width]);
+
 
 						for (int i = 0; i < CoordData[0].size(); i++)
 						{
@@ -2545,6 +2566,7 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 					TriangleCoords[j].x = OutPosX;
 					TriangleCoords[j].y = OutPosY;
 					TriangleCoords[j].z = Tri.Verts[j].z;
+					TriangleCoords[j].w = Tri.Verts[j].w;
 				}
 
 				DrawTriangle(TriangleCoords, Tri.TriangleVertexData);
