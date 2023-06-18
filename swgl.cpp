@@ -954,6 +954,17 @@ public:
 		}
 		else
 		{
+			if (OpType == GLSL_TOK_ASSIGN)
+			{
+				glslToken* First = TokenizeSubExpr(Scope, NextOperator.first);
+				At = NextOperator.second;
+				glslToken* Result = TokenizeExpr(Scope, NextSemi);
+				glslToken* Final = new glslToken;
+				Final->Type = OpType;
+				Final->First = First;
+				Final->Second = Result;
+				return Final;
+			}
 			return TokenizeExpr(Scope, NextSemi);
 		}
 
@@ -2322,7 +2333,7 @@ void DrawTriangle(glslVec4* Coords, std::vector<std::pair<glslExValue, glslVaria
 					{
 						*CurZ = z;
 
-						uint32_t* CurCol = &(GlobalFramebuffer->ColorAttachment[(int)x + (GlobalFramebuffer->Height - 1 -(int)y) * GlobalFramebuffer->Width]);
+						uint32_t* CurCol = &(GlobalFramebuffer->ColorAttachment[(int)x + ((ViewportHeight - ((int)y - ViewportY)) + ViewportY) * GlobalFramebuffer->Width]);
 
 
 						for (int i = 0; i < CoordData[0].size(); i++)
