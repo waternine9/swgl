@@ -15,7 +15,7 @@
 #include <memory.h>
 #else // ^^^ SWGL_FREESTANDING // vvv !SWGL_FREESTANDING
 // PUT YOUR MEMORY ALLOCATOR'S HEADER FILE HERE
-#endif
+#endif // SWGL_FREESTANDING
 
 #ifdef __cplusplus
 extern "C" {
