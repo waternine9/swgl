@@ -1,6 +1,7 @@
 #include "swgl.h"
 
-#include <memory.h> // Comment this line out for freestanding, you'll have to include your header files though that should allow malloc, memcpy, memset, and free.
+// #include <memory.h> // Comment this line out for freestanding, you'll have to include your header files though that should allow malloc, memcpy, memset, and free.
+#include "../mem.hpp"
 
 /*
 * HELPER CONSTANTS
@@ -3190,8 +3191,26 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 					TriangleCoords[j].z = Tri.Verts[j].z;
 					TriangleCoords[j].w = Tri.Verts[j].w;
 				}
+				
+
 
 				DrawTriangle(TriangleCoords, Tri.TriangleVertexData);
+
+				// Now clean up all this mess
+				for (int _i = 0;_i < 3;_i++)
+				{
+					for (int _j = 0;_j < Tri.TriangleVertexData[_i]->Size;_j++)
+					{
+						_Pair* DirtyPair;
+
+						VectorRead(Tri.TriangleVertexData[_i], &DirtyPair, _j);
+
+						// Now we obliterate the mess
+						
+						free(DirtyPair);
+					}
+					free(Tri.TriangleVertexData[_i]);
+				}
 			}
 		}
 	}
