@@ -1,5 +1,7 @@
 #include "swgl.h"
-#include <stdio.h>
+
+// #include <memory.h> // Comment this line out for freestanding, you'll have to include your header files though that should allow malloc, memcpy, memset, and free.
+#include "../mem.hpp"
 
 /*
 * HELPER CONSTANTS
@@ -13,6 +15,77 @@
 
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
+
+double atof(const char* str) {
+    double result = 0.0;
+    double factor = 1.0;
+    uint8_t decimalPointSeen = 0;
+	double sign = 1.0;
+
+    // Handle negative numbers
+    if (*str == '-') 
+	{
+		sign = -1.0;
+        str++;
+    }
+
+    for (; *str; str++) 
+	{
+        if (*str == '.') 
+		{
+            decimalPointSeen = 1; 
+            continue;
+        }
+        
+        int digit = *str - '0';
+        if (digit >= 0 && digit <= 9) 
+		{
+            if (decimalPointSeen) 
+			{
+                factor /= 10.0;
+                result += factor * digit;
+            } else 
+			{
+                result = result * 10.0 + digit;
+            }
+        } 
+		else 
+		{
+            break;  // Invalid character, stop parsing
+        }
+    }
+    
+    return result * sign;
+}
+
+int atoi(const char* str) 
+{
+    int result = 0;
+    int sign = 1;
+
+    // Skip leading white space, if any
+    while (*str == ' ') 
+	{
+        ++str;
+    }
+
+    // Check for sign
+    if (*str == '-' || *str == '+') 
+	{
+        sign = (*str == '-') ? -1 : 1;
+        ++str;
+    }
+
+    // Process characters of string
+    while (*str >= '0' && *str <= '9') {
+
+        result = result * 10 + (*str - '0');
+        ++str;
+    }
+
+    // Return the resultant integer
+    return sign * result;
+}
 
 typedef struct
 {
@@ -167,7 +240,7 @@ char* String2CString(_String* _Str)
 	return _Str->Data;
 }
 
-_String* CString2String(char* _Str)
+_String* CString2String(const char* _Str)
 {
 	_String* String = NewString();
 	while (*_Str)
@@ -721,7 +794,7 @@ typedef struct _glslToken
 typedef struct _glslScope
 {
 	_Vector* Variables;
-	struct glslScope* ParentScope;
+	struct _glslScope* ParentScope;
 	_Vector* Lines;
 } glslScope;
 
@@ -1297,7 +1370,7 @@ glslToken* GLSLTokenizeLine(glslTokenizer* Tokenizer, glslScope* Scope)
 
 	_String* DeclName = GLSLTellStringUntilNWS(Tokenizer, MIN(NextOperatorFirst, NextSemi));
 
-	glslVariable* DeclVar = (glslToken*)malloc(sizeof(glslVariable));
+	glslVariable* DeclVar = (glslVariable*)malloc(sizeof(glslVariable));
 
 	DeclVar->Name = DeclName;
 	DeclVar->Type = DeclType;
@@ -1928,7 +2001,7 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 		glslExValue Result = ExecuteGLSLToken(Token->Second);
 
 		AssignToExVal(Token->Var, Result);
-		glslExValue ExOutput = { 0 };
+		glslExValue ExOutput = { GLSL_UNKNOWN };
 		return ExOutput;
 	}
 	else if (Token->Type == GLSL_TOK_ASSIGN)
@@ -1947,7 +2020,7 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 
 		if (FirstResult.Type != SecondResult.Type)
 		{
-			glslExValue ExOutput = { 0 };
+			glslExValue ExOutput = { GLSL_UNKNOWN };
 			return ExOutput;
 		}
 
@@ -2011,7 +2084,7 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 
 		if (FirstResult.Type != SecondResult.Type)
 		{
-			glslExValue ExOutput = { 0 };
+			glslExValue ExOutput = { GLSL_UNKNOWN };
 			return ExOutput;
 		}
 
@@ -2077,7 +2150,7 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 		{
 			if (FirstResult.Type != SecondResult.Type)
 			{
-				glslExValue ExOutput = { 0 };
+				glslExValue ExOutput = { GLSL_UNKNOWN };
 				return ExOutput;
 			}
 			FirstResult.x *= SecondResult.x;
@@ -2139,7 +2212,7 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 
 		if (FirstResult.Type != SecondResult.Type)
 		{
-			glslExValue ExOutput = { 0 };
+			glslExValue ExOutput = { GLSL_UNKNOWN };
 			return ExOutput;
 		}
 
@@ -2201,7 +2274,7 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 
 		if (Token->Swizzle->Size == 0)
 		{
-			glslExValue ExOutput = { 0 };
+			glslExValue ExOutput = { GLSL_UNKNOWN };
 			return ExOutput;
 		}
 		else if (Token->Swizzle->Size == 1)
@@ -2341,7 +2414,7 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar** string, const G
 	{
 		if (!length)
 		{
-			StringAppend(ShaderCode, CString2String(string[i]));
+			StringAppend(ShaderCode, CString2String((const char*)string[i]));
 		}
 		else
 		{
