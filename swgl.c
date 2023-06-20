@@ -1,7 +1,6 @@
 #include "swgl.h"
 
-// #include <memory.h> // Comment this line out for freestanding, you'll have to include your header files though that should allow malloc, memcpy, memset, and free.
-#include "../mem.hpp"
+#include <memory.h> // Comment this line out for freestanding, you'll have to include your header files though that should allow malloc, memcpy, memset, and free.
 
 /*
 * HELPER CONSTANTS
