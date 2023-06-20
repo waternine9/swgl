@@ -7,15 +7,6 @@
 
 #include <stdint.h>
 #include <stddef.h>
-#include <math.h>
-#include <string.h>
-#include <stdlib.h>
-
-#ifndef SWGL_FREESTANDING
-#include <memory.h>
-#else // ^^^ SWGL_FREESTANDING // vvv !SWGL_FREESTANDING
-// PUT YOUR MEMORY ALLOCATOR'S HEADER FILE HERE
-#endif // SWGL_FREESTANDING
 
 #ifdef __cplusplus
 extern "C" {
