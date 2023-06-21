@@ -16,74 +16,75 @@
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 
 double atof(const char* str) {
-    double result = 0.0;
-    double factor = 1.0;
-    uint8_t decimalPointSeen = 0;
+	double result = 0.0;
+	double factor = 1.0;
+	uint8_t decimalPointSeen = 0;
 	double sign = 1.0;
 
-    // Handle negative numbers
-    if (*str == '-') 
+	// Handle negative numbers
+	if (*str == '-')
 	{
 		sign = -1.0;
-        str++;
-    }
+		str++;
+	}
 
-    for (; *str; str++) 
+	for (; *str; str++)
 	{
-        if (*str == '.') 
+		if (*str == '.')
 		{
-            decimalPointSeen = 1; 
-            continue;
-        }
-        
-        int digit = *str - '0';
-        if (digit >= 0 && digit <= 9) 
+			decimalPointSeen = 1;
+			continue;
+		}
+
+		int digit = *str - '0';
+		if (digit >= 0 && digit <= 9)
 		{
-            if (decimalPointSeen) 
+			if (decimalPointSeen)
 			{
-                factor /= 10.0;
-                result += factor * digit;
-            } else 
+				factor /= 10.0;
+				result += factor * digit;
+			}
+			else
 			{
-                result = result * 10.0 + digit;
-            }
-        } 
-		else 
+				result = result * 10.0 + digit;
+			}
+		}
+		else
 		{
-            break;  // Invalid character, stop parsing
-        }
-    }
-    
-    return result * sign;
+			break;  // Invalid character, stop parsing
+		}
+	}
+
+	return result * sign;
 }
 
-int atoi(const char* str) 
+int atoi(const char* str)
 {
-    int result = 0;
-    int sign = 1;
+	int result = 0;
+	int sign = 1;
 
-    // Skip leading white space, if any
-    while (*str == ' ') 
+	// Skip leading white space, if any
+	while (*str == ' ')
 	{
-        ++str;
-    }
+		++str;
+	}
 
-    // Check for sign
-    if (*str == '-' || *str == '+') 
+	// Check for sign
+	if (*str == '-' || *str == '+')
 	{
-        sign = (*str == '-') ? -1 : 1;
-        ++str;
-    }
+		sign = (*str == '-') ? -1 : 1;
+		++str;
+	}
 
-    // Process characters of string
-    while (*str >= '0' && *str <= '9') {
+	// Process characters of string
+	while (*str >= '0' && *str <= '9') {
 
-        result = result * 10 + (*str - '0');
-        ++str;
-    }
+		result = result * 10 + (*str - '0');
+		++str;
+	}
 
-    // Return the resultant integer
-    return sign * result;
+	// Return the resultant integer
+	return sign * result;
 }
 
 typedef struct
@@ -136,9 +137,14 @@ void VectorRead(_Vector* _Vec, void* _Out, int _Index)
 	memcpy(_Out, (uint8_t*)_Vec->Data + _Vec->ElemSize * _Index, _Vec->ElemSize);
 }
 
+void VectorWrite(_Vector* _Vec, void* _Data, int _Index)
+{
+	memcpy((uint8_t*)_Vec->Data + _Vec->ElemSize * _Index, _Data, _Vec->ElemSize);
+}
+
 void VectorFree(_Vector* _Vec)
 {
-	free(_Vec->Data);
+
 }
 
 void VectorCopy(_Vector* _Dest, _Vector* _Src)
@@ -153,43 +159,9 @@ void VectorCopy(_Vector* _Dest, _Vector* _Src)
 
 typedef struct
 {
-	void* First;
-	size_t FirstSize;
-	void* Second;
-	size_t SecondSize;
-} _Pair;
-
-_Pair* MakePair(void* _FirstData, size_t _FirstSize, void* _SecondData, size_t _SecondSize)
-{
-	_Pair* _MyPair = (_Pair*)malloc(sizeof(_Pair));
-	_MyPair->First = malloc(_FirstSize);
-	memcpy(_MyPair->First, _FirstData, _FirstSize);
-	_MyPair->Second = malloc(_SecondSize);
-	memcpy(_MyPair->Second, _SecondData, _SecondSize);
-
-	_MyPair->FirstSize = _FirstSize;
-	_MyPair->SecondSize = _SecondSize;
-}
-
-void PairSetFirst(_Pair* Pair, void* _Data)
-{
-	memcpy(Pair->First, _Data, Pair->FirstSize);
-}
-
-void PairSetSecond(_Pair* Pair, void* _Data)
-{
-	memcpy(Pair->Second, _Data, Pair->SecondSize);
-}
-
-void PairGetFirst(_Pair* Pair, void* _Out)
-{
-	memcpy(_Out, Pair->First, Pair->FirstSize);
-}
-
-void PairGetSecond(_Pair* Pair, void* _Out)
-{
-	memcpy(_Out, Pair->Second, Pair->SecondSize);
-}
+	int first;
+	int second;
+} _IntPair;
 
 typedef struct
 {
@@ -274,7 +246,7 @@ void StringCopy(_String* _Dst, _String* _Src)
 * /HELPER FUNCS AND STRUCTS
 */
 
-typedef enum 
+typedef enum
 {
 	GLSL_VEC3,
 	GLSL_VEC2,
@@ -288,7 +260,7 @@ typedef enum
 	GLSL_UNKNOWN
 } glslType;
 
-typedef enum 
+typedef enum
 {
 	GLSL_TOK_ADD,
 	GLSL_TOK_SUB,
@@ -302,7 +274,7 @@ typedef enum
 	GLSL_TOK_VAR_DECL,
 	GLSL_TOK_CONST,
 	GLSL_TOK_SWIZZLE,
-	
+
 	GLSL_TOK_FLOAT_CONSTRUCT,
 	GLSL_TOK_VEC2_CONSTRUCT,
 	GLSL_TOK_VEC3_CONSTRUCT,
@@ -310,7 +282,7 @@ typedef enum
 	GLSL_TOK_INT_CONSTRUCT
 } glslTokenType;
 
-typedef struct 
+typedef struct
 {
 	float m00;
 	float m01;
@@ -333,7 +305,7 @@ typedef struct
 	float m33;
 } glslMat4;
 
-typedef struct 
+typedef struct
 {
 	float m00;
 	float m01;
@@ -348,7 +320,7 @@ typedef struct
 	float m22;
 } glslMat3;
 
-typedef struct 
+typedef struct
 {
 	float m00;
 	float m01;
@@ -357,7 +329,7 @@ typedef struct
 	float m11;
 } glslMat2;
 
-typedef struct 
+typedef struct
 {
 	float x;
 	float y;
@@ -365,20 +337,20 @@ typedef struct
 	float w;
 } glslVec4;
 
-typedef struct 
+typedef struct
 {
 	float x;
 	float y;
 	float z;
 } glslVec3;
 
-typedef struct 
+typedef struct
 {
 	float x;
 	float y;
 } glslVec2;
 
-typedef struct 
+typedef struct
 {
 	glslType Type;
 
@@ -428,6 +400,18 @@ typedef struct _glslVariable
 
 	glslValue Value;
 } glslVariable;
+
+typedef struct
+{
+	glslExValue first;
+	glslVariable* second;
+} _ExVarPair;
+
+typedef struct
+{
+	glslVariable* first;
+	glslVariable* second;
+} _VarPair;
 
 uint8_t GLSLIsDigit(char c)
 {
@@ -481,31 +465,26 @@ glslExValue InterpolateExValue(glslExValue Val0, glslExValue Val1, float t)
 		glslExValue Val = { GLSL_INT, 0.0f, 0.0f, 0.0f, 0.0f, (int)(Val0.i + t * (Val1.i - Val0.i)) };
 		Out = Val;
 	}
+	return Out;
 }
 
-int ClipTriangleAgainstNearPlane(Triangle* tri, Triangle *outTri) 
+int ClipTriangleAgainstNearPlane(Triangle* tri, Triangle* outTri)
 {
 
 	for (int i = 0; i < 3; i++)
 	{
 		outTri[0].Verts[i] = tri->Verts[i];
 		outTri[1].Verts[i] = tri->Verts[i];
-		outTri[0].TriangleVertexData[i] = NewVector(sizeof(_Pair*));
-		outTri[1].TriangleVertexData[i] = NewVector(sizeof(_Pair*));
+		outTri[0].TriangleVertexData[i] = NewVector(sizeof(_ExVarPair));
+		outTri[1].TriangleVertexData[i] = NewVector(sizeof(_ExVarPair));
 		for (int j = 0; j < tri->TriangleVertexData[i]->Size; j++)
 		{
-			_Pair* Pair;
+			_ExVarPair Pair;
 
 			VectorRead(tri->TriangleVertexData[i], &Pair, j);
 
-			glslExValue PairFirst;
-			glslVariable* PairSecond;
-
-			PairGetFirst(Pair, &PairFirst);
-			PairGetSecond(Pair, &PairSecond);
-
-			VectorPushBack(outTri[0].TriangleVertexData[i], MakePair(&PairFirst, sizeof(glslExValue), &PairSecond, sizeof(glslVariable*)));
-			VectorPushBack(outTri[1].TriangleVertexData[i], MakePair(&PairFirst, sizeof(glslExValue), &PairSecond, sizeof(glslVariable*)));
+			VectorPushBack(outTri[0].TriangleVertexData[i], &Pair);
+			VectorPushBack(outTri[1].TriangleVertexData[i], &Pair);
 		}
 	}
 
@@ -514,20 +493,20 @@ int ClipTriangleAgainstNearPlane(Triangle* tri, Triangle *outTri)
 	glslVec4* OutsidePoints[3]; int nOutsidePointCount = 0;
 	_Vector* OutExValues[3];
 
-	InExValues[0] = NewVector(sizeof(_Pair));
-	InExValues[1] = NewVector(sizeof(_Pair));
-	InExValues[2] = NewVector(sizeof(_Pair));
+	InExValues[0] = NewVector(sizeof(_ExVarPair));
+	InExValues[1] = NewVector(sizeof(_ExVarPair));
+	InExValues[2] = NewVector(sizeof(_ExVarPair));
 
-	OutExValues[0] = NewVector(sizeof(_Pair));
-	OutExValues[1] = NewVector(sizeof(_Pair));
-	OutExValues[2] = NewVector(sizeof(_Pair));
+	OutExValues[0] = NewVector(sizeof(_ExVarPair));
+	OutExValues[1] = NewVector(sizeof(_ExVarPair));
+	OutExValues[2] = NewVector(sizeof(_ExVarPair));
 
 	if (tri->Verts[0].z >= -tri->Verts[0].w)
 	{
 		VectorCopy(InExValues[nInsidePointCount], tri->TriangleVertexData[0]);
 		InsidePoints[nInsidePointCount++] = &tri->Verts[0];
 	}
-	else 
+	else
 	{
 		VectorCopy(OutExValues[nOutsidePointCount], tri->TriangleVertexData[0]);
 		OutsidePoints[nOutsidePointCount++] = &tri->Verts[0];
@@ -537,7 +516,7 @@ int ClipTriangleAgainstNearPlane(Triangle* tri, Triangle *outTri)
 		VectorCopy(InExValues[nInsidePointCount], tri->TriangleVertexData[1]);
 		InsidePoints[nInsidePointCount++] = &tri->Verts[1];
 	}
-	else 
+	else
 	{
 		VectorCopy(OutExValues[nOutsidePointCount], tri->TriangleVertexData[1]);
 		OutsidePoints[nOutsidePointCount++] = &tri->Verts[1];
@@ -547,7 +526,7 @@ int ClipTriangleAgainstNearPlane(Triangle* tri, Triangle *outTri)
 		VectorCopy(InExValues[nInsidePointCount], tri->TriangleVertexData[2]);
 		InsidePoints[nInsidePointCount++] = &tri->Verts[2];
 	}
-	else 
+	else
 	{
 		VectorCopy(OutExValues[nOutsidePointCount], tri->TriangleVertexData[2]);
 		OutsidePoints[nOutsidePointCount++] = &tri->Verts[2];
@@ -574,31 +553,23 @@ int ClipTriangleAgainstNearPlane(Triangle* tri, Triangle *outTri)
 		outTri[0].Verts[1] = IntersectNearPlane(*InsidePoints[0], *OutsidePoints[0], &t);
 		for (int i = 0; i < tri->TriangleVertexData[1]->Size; i++)
 		{
-			_Pair Pair0, Pair1;
+			_ExVarPair Pair0, Pair1;
 			VectorRead(InExValues[0], &Pair0, i);
 			VectorRead(OutExValues[0], &Pair1, i);
 			glslExValue FirstExVal, SecondExVal;
-			PairGetFirst(&Pair0, &FirstExVal);
-			PairGetSecond(&Pair1, &SecondExVal);
-			glslExValue Interpolated = InterpolateExValue(FirstExVal, SecondExVal, t);
-			_Pair OutPair;
-			VectorRead(outTri[0].TriangleVertexData[1], &OutPair, i);
-			PairSetFirst(&OutPair, &Interpolated);
+			Pair0.first = InterpolateExValue(Pair0.first, Pair1.first, t);
+			VectorWrite(outTri[0].TriangleVertexData[1], &Pair0, i);
 		}
 
 		outTri[0].Verts[2] = IntersectNearPlane(*InsidePoints[0], *OutsidePoints[1], &t);
 		for (int i = 0; i < tri->TriangleVertexData[2]->Size; i++)
 		{
-			_Pair Pair0, Pair1;
+			_ExVarPair Pair0, Pair1;
 			VectorRead(InExValues[0], &Pair0, i);
 			VectorRead(OutExValues[1], &Pair1, i);
 			glslExValue FirstExVal, SecondExVal;
-			PairGetFirst(&Pair0, &FirstExVal);
-			PairGetSecond(&Pair1, &SecondExVal);
-			glslExValue Interpolated = InterpolateExValue(FirstExVal, SecondExVal, t);
-			_Pair OutPair;
-			VectorRead(outTri[0].TriangleVertexData[2], &OutPair, i);
-			PairSetFirst(&OutPair, &Interpolated);
+			Pair0.first = InterpolateExValue(Pair0.first, Pair1.first, t);
+			VectorWrite(outTri[0].TriangleVertexData[2], &Pair0, i);
 		}
 
 		VectorFree(InExValues[0]);
@@ -623,16 +594,12 @@ int ClipTriangleAgainstNearPlane(Triangle* tri, Triangle *outTri)
 		outTri[0].Verts[2] = IntersectNearPlane(*InsidePoints[0], *OutsidePoints[0], &t);
 		for (int i = 0; i < tri->TriangleVertexData[2]->Size; i++)
 		{
-			_Pair Pair0, Pair1;
+			_ExVarPair Pair0, Pair1;
 			VectorRead(InExValues[0], &Pair0, i);
 			VectorRead(OutExValues[0], &Pair1, i);
 			glslExValue FirstExVal, SecondExVal;
-			PairGetFirst(&Pair0, &FirstExVal);
-			PairGetSecond(&Pair1, &SecondExVal);
-			glslExValue Interpolated = InterpolateExValue(FirstExVal, SecondExVal, t);
-			_Pair OutPair;
-			VectorRead(outTri[0].TriangleVertexData[2], &OutPair, i);
-			PairSetFirst(&OutPair, &Interpolated);
+			Pair0.first = InterpolateExValue(Pair0.first, Pair1.first, t);
+			VectorWrite(outTri[0].TriangleVertexData[2], &Pair0, i);
 		}
 
 		outTri[1].Verts[0] = *InsidePoints[1];
@@ -642,16 +609,12 @@ int ClipTriangleAgainstNearPlane(Triangle* tri, Triangle *outTri)
 		outTri[1].Verts[2] = IntersectNearPlane(*InsidePoints[1], *OutsidePoints[0], &t);
 		for (int i = 0; i < tri->TriangleVertexData[2]->Size; i++)
 		{
-			_Pair Pair0, Pair1;
+			_ExVarPair Pair0, Pair1;
 			VectorRead(InExValues[1], &Pair0, i);
 			VectorRead(OutExValues[0], &Pair1, i);
 			glslExValue FirstExVal, SecondExVal;
-			PairGetFirst(&Pair0, &FirstExVal);
-			PairGetSecond(&Pair1, &SecondExVal);
-			glslExValue Interpolated = InterpolateExValue(FirstExVal, SecondExVal, t);
-			_Pair OutPair;
-			VectorRead(outTri[1].TriangleVertexData[2], &OutPair, i);
-			PairSetFirst(&OutPair, &Interpolated);
+			Pair0.first = InterpolateExValue(Pair0.first, Pair1.first, t);
+			VectorWrite(outTri[1].TriangleVertexData[2], &Pair0, i);
 		}
 
 		VectorFree(InExValues[0]);
@@ -784,7 +747,7 @@ typedef struct _glslToken
 
 	glslConst Const;
 	glslVariable* Var;
-	
+
 	_Vector* Swizzle;
 
 	_Vector* Args;
@@ -877,7 +840,7 @@ uint8_t GLSLIsOpChar(char c)
 	if (c == '=') return 1;
 	return 0;
 }
-_Pair* GLSLTellNextOperator(glslTokenizer* Tokenizer, glslTokenType *OutOp)
+_IntPair GLSLTellNextOperator(glslTokenizer* Tokenizer, glslTokenType* OutOp)
 {
 	int counter = 0;
 	for (int i = Tokenizer->At; i < Tokenizer->Code->Size; i++)
@@ -893,67 +856,72 @@ _Pair* GLSLTellNextOperator(glslTokenizer* Tokenizer, glslTokenType *OutOp)
 					StringPush(Operator, StringGet(Tokenizer->Code, i + 1));
 				}
 
-				int iplus1 = i + 1;
-
 				if (StringEquals(Operator, "+"))
 				{
 					*OutOp = GLSL_TOK_ADD;
-					return MakePair(&i, sizeof(int), &iplus1, sizeof(int));
+					_IntPair Output = { i, i + 1 };
+					return Output;
 				}
 
 				if (StringEquals(Operator, "-") && !GLSLIsDigit(StringGet(Tokenizer->Code, i + 1)))
 				{
 					*OutOp = GLSL_TOK_SUB;
-					return MakePair(&i, sizeof(int), &iplus1, sizeof(int));
+					_IntPair Output = { i, i + 1 };
+					return Output;
 				}
 
 				if (StringEquals(Operator, "*"))
 				{
 					*OutOp = GLSL_TOK_MUL;
-					return MakePair(&i, sizeof(int), &iplus1, sizeof(int));
+					_IntPair Output = { i, i + 1 };
+					return Output;
 				}
 
 				if (StringEquals(Operator, "/"))
 				{
 					*OutOp = GLSL_TOK_DIV;
-					return MakePair(&i, sizeof(int), &iplus1, sizeof(int));
+					_IntPair Output = { i, i + 1 };
+					return Output;
 				}
 
 				if (StringEquals(Operator, "="))
 				{
 					*OutOp = GLSL_TOK_ASSIGN;
-					return MakePair(&i, sizeof(int), &iplus1, sizeof(int));
+					_IntPair Output = { i, i + 1 };
+					return Output;
 				}
 
 				if (StringEquals(Operator, "<"))
 				{
 					*OutOp = GLSL_TOK_LT;
-					return MakePair(&i, sizeof(int), &iplus1, sizeof(int));
+					_IntPair Output = { i, i + 1 };
+					return Output;
 				}
 
 				if (StringEquals(Operator, ">"))
 				{
 					*OutOp = GLSL_TOK_GT;
-					return MakePair(&i, sizeof(int), &iplus1, sizeof(int));
+					_IntPair Output = { i, i + 1 };
+					return Output;
 				}
 
 				if (StringEquals(Operator, "=="))
 				{
-					int iplus2 = i + 2;
 					*OutOp = GLSL_TOK_EQ;
-					return MakePair(&i, sizeof(int), &iplus2, sizeof(int));
+					_IntPair Output = { i, i + 2 };
+					return Output;
 				}
 			}
 		}
 		if (StringGet(Tokenizer->Code, i) == '(') counter++;
 		if (StringGet(Tokenizer->Code, i) == ')') counter--;
 	}
-	int BigNum = SWGL_BIGNUM;
-	return MakePair(&BigNum, sizeof(int), &BigNum, sizeof(int));;
+	_IntPair Output = { SWGL_BIGNUM, SWGL_BIGNUM };
+	return Output;
 }
 uint8_t GLSLFindVariableInScope(glslScope* Scope, _String* Name, glslVariable** Out)
 {
-	for (int i = 0;i < Scope->Variables->Size;i++)
+	for (int i = 0; i < Scope->Variables->Size; i++)
 	{
 		glslVariable* Var;
 		VectorRead(Scope->Variables, &Var, i);
@@ -968,7 +936,7 @@ uint8_t GLSLFindVariableInScope(glslScope* Scope, _String* Name, glslVariable** 
 }
 uint8_t GLSLFindVariable(glslTokenizer* Tokenizer, glslScope* Scope, _String* Name, glslVariable** Out)
 {
-	for (int i = 0;i < Tokenizer->GlobalVars->Size;i++)
+	for (int i = 0; i < Tokenizer->GlobalVars->Size; i++)
 	{
 		glslVariable* Var;
 		VectorRead(Tokenizer->GlobalVars, &Var, i);
@@ -1119,7 +1087,7 @@ glslToken* GLSLTokenizeSubExpr(glslTokenizer* Tokenizer, glslScope* Scope, int E
 
 		Tokenizer->At++;
 		glslToken* OutTok = GLSLTokenizeArgs(Tokenizer, Scope, NextCloseParen);
-			
+
 		if (TypeFromStr == GLSL_FLOAT)
 		{
 			if (OutTok->Args->Size != 1)
@@ -1212,7 +1180,7 @@ glslToken* GLSLTokenizeSubExpr(glslTokenizer* Tokenizer, glslScope* Scope, int E
 		if (GLSLFindVariable(Tokenizer, Scope, ProbeVarName, &ProbeVar))
 		{
 			glslToken* VarTok = (glslToken*)malloc(sizeof(glslToken));
-				
+
 			VarTok->Type = GLSL_TOK_VAR;
 			VarTok->Var = ProbeVar;
 			ProbeVar->Value.Alloc = 0;
@@ -1277,36 +1245,28 @@ glslToken* GLSLTokenizeExpr(glslTokenizer* Tokenizer, glslScope* Scope, int EndA
 	}
 
 	glslTokenType OpType;
-	_Pair* NextOp = GLSLTellNextOperator(Tokenizer, &OpType);
+	_IntPair NextOp = GLSLTellNextOperator(Tokenizer, &OpType);
 
-	int NextOpFirst, NextOpSecond;
-
-	PairGetFirst(NextOp, &NextOpFirst);
-	PairGetSecond(NextOp, &NextOpSecond);
-
-	Tok = GLSLTokenizeSubExpr(Tokenizer, Scope, MIN(NextOpFirst, EndAt));
+	Tok = GLSLTokenizeSubExpr(Tokenizer, Scope, MIN(NextOp.first, EndAt));
 
 
 
-	while (Tokenizer->At < EndAt && NextOpFirst != 0x7FFFFFFF)
+	while (Tokenizer->At < EndAt && NextOp.first != 0x7FFFFFFF)
 	{
 		glslToken* SurroundToken = (glslToken*)malloc(sizeof(glslToken));
 		SurroundToken->Type = OpType;
 		SurroundToken->First = Tok;
 
-		Tokenizer->At = NextOpSecond;
+		Tokenizer->At = NextOp.second;
 
 		NextOp = GLSLTellNextOperator(Tokenizer, &OpType);
 
-		PairGetFirst(NextOp, &NextOpFirst);
-		PairGetSecond(NextOp, &NextOpSecond);
-
-		SurroundToken->Second = GLSLTokenizeSubExpr(Tokenizer, Scope, MIN(NextOpFirst, EndAt));
+		SurroundToken->Second = GLSLTokenizeSubExpr(Tokenizer, Scope, MIN(NextOp.first, EndAt));
 
 		Tok = SurroundToken;
 	}
 
-	Tokenizer->At = EndAt + 1; 
+	Tokenizer->At = EndAt + 1;
 
 	return Tok;
 }
@@ -1317,15 +1277,10 @@ glslToken* GLSLTokenizeLine(glslTokenizer* Tokenizer, glslScope* Scope)
 	int NextBlank = GLSLTellNext(Tokenizer, ' ');
 	int NextSemi = GLSLTellNext(Tokenizer, ';');
 	glslTokenType OpType;
-	_Pair* NextOperator = GLSLTellNextOperator(Tokenizer, &OpType);
-
-	int NextOperatorFirst, NextOperatorSecond;
-
-	PairGetFirst(NextOperator, &NextOperatorFirst);
-	PairGetSecond(NextOperator, &NextOperatorSecond);
+	_IntPair NextOperator = GLSLTellNextOperator(Tokenizer, &OpType);
 
 	uint8_t Uninitialized = 0;
-	if (NextOperatorFirst >= NextSemi)
+	if (NextOperator.first >= NextSemi)
 	{
 		Uninitialized = 1;
 	}
@@ -1343,8 +1298,8 @@ glslToken* GLSLTokenizeLine(glslTokenizer* Tokenizer, glslScope* Scope)
 	{
 		if (OpType == GLSL_TOK_ASSIGN)
 		{
-			glslToken* First = GLSLTokenizeSubExpr(Tokenizer, Scope, NextOperatorFirst);
-			Tokenizer->At = NextOperatorSecond;
+			glslToken* First = GLSLTokenizeSubExpr(Tokenizer, Scope, NextOperator.first);
+			Tokenizer->At = NextOperator.second;
 			glslToken* Result = GLSLTokenizeExpr(Tokenizer, Scope, NextSemi);
 			glslToken* Final = (glslToken*)malloc(sizeof(glslToken));
 			Final->Type = OpType;
@@ -1367,7 +1322,7 @@ glslToken* GLSLTokenizeLine(glslTokenizer* Tokenizer, glslScope* Scope)
 	Tokenizer->At = NextBlank + 1;
 	NextBlank = GLSLTellNext(Tokenizer, ' ');
 
-	_String* DeclName = GLSLTellStringUntilNWS(Tokenizer, MIN(NextOperatorFirst, NextSemi));
+	_String* DeclName = GLSLTellStringUntilNWS(Tokenizer, MIN(NextOperator.first, NextSemi));
 
 	glslVariable* DeclVar = (glslVariable*)malloc(sizeof(glslVariable));
 
@@ -1377,12 +1332,12 @@ glslToken* GLSLTokenizeLine(glslTokenizer* Tokenizer, glslScope* Scope)
 	DeclVar->isOut = 0;
 	DeclVar->isLayout = 0;
 	DeclVar->isUniform = 0;
-	
+
 	DeclVar->Value.Alloc = 0;
 
 	VectorPushBack(Scope->Variables, &DeclVar);
 
-	if (NextOperatorFirst > NextSemi)
+	if (NextOperator.first > NextSemi)
 	{
 		Tokenizer->At = NextSemi + 1;
 		return 0;
@@ -1390,7 +1345,7 @@ glslToken* GLSLTokenizeLine(glslTokenizer* Tokenizer, glslScope* Scope)
 
 	OutToken->Var = DeclVar;
 
-	Tokenizer->At = NextOperatorSecond;
+	Tokenizer->At = NextOperator.second;
 	OutToken->Second = GLSLTokenizeExpr(Tokenizer, Scope, NextSemi);
 
 	return OutToken;
@@ -1484,13 +1439,13 @@ glslFunction* GLSLTokenizeFunction(glslTokenizer* Tokenizer)
 	return MyFunc;
 }
 
-void GLSLTokenizeUniform(glslTokenizer* Tokenizer) 
+void GLSLTokenizeUniform(glslTokenizer* Tokenizer)
 {
 	while (StringGet(Tokenizer->Code, Tokenizer->At) == ' ') Tokenizer->At++;
 
 	int NextSemi = GLSLTellNext(Tokenizer, ';');
 	int NextBlank = GLSLTellNext(Tokenizer, ' ');
-	
+
 	if (NextBlank > NextSemi || NextBlank == 0x7FFFFFFF)
 	{
 		return;
@@ -1678,7 +1633,7 @@ void GLSLTokenizeLayout(glslTokenizer* Tokenizer)
 	while (StringGet(Tokenizer->Code, Tokenizer->At) == ' ') Tokenizer->At++;
 
 	_String* Name = GLSLTellStringUntilNWS(Tokenizer, NextSemi);
-	
+
 	glslVariable* Variable = (glslVariable*)malloc(sizeof(glslVariable));
 	Variable->Type = Type;
 	Variable->Name = Name;
@@ -2220,7 +2175,7 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 		FirstResult.z /= SecondResult.z;
 		FirstResult.w /= SecondResult.w;
 		if (SecondResult.i != 0) FirstResult.i /= SecondResult.i;
-		
+
 		return FirstResult;
 	}
 	else if (Token->Type == GLSL_TOK_SWIZZLE)
@@ -2233,7 +2188,7 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 		{
 			float CurVal = 0;
 			int CurSwizzle;
-			
+
 			VectorRead(Token->Swizzle, &CurSwizzle, i);
 
 			if (CurSwizzle == 0)
@@ -2313,7 +2268,7 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 		VectorRead(Token->Args, &TokArg, 1);
 		glslExValue Arg1 = ExecuteGLSLToken(TokArg);
 
-		glslExValue ExOutput = { GLSL_VEC2, 
+		glslExValue ExOutput = { GLSL_VEC2,
 			Arg0.Type != GLSL_INT ? Arg0.x : (float)Arg0.i,
 			Arg1.Type != GLSL_INT ? Arg1.x : (float)Arg1.i
 		};
@@ -2372,7 +2327,7 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 
 void ExecuteGLSLFunction(glslFunction* Func)
 {
-	for (int i = 0;i < Func->RootScope->Lines->Size;i++)
+	for (int i = 0; i < Func->RootScope->Lines->Size; i++)
 	{
 		glslToken* LineTok;
 
@@ -2409,7 +2364,7 @@ GLuint glCreateShader(GLenum type)
 void glShaderSource(GLuint shader, GLsizei count, const GLchar** string, const GLint* length)
 {
 	_String* ShaderCode = NewString();
-	for (int i = 0;i < count;i++)
+	for (int i = 0; i < count; i++)
 	{
 		if (!length)
 		{
@@ -2423,7 +2378,7 @@ void glShaderSource(GLuint shader, GLsizei count, const GLchar** string, const G
 			}
 		}
 	}
-	
+
 	RawShader* TargetShader;
 
 	VectorRead(GlobalShaders, &TargetShader, shader);
@@ -2465,7 +2420,7 @@ _Vector* GlobalPrograms;
 GLuint glCreateProgram()
 {
 	Program* NewProgram = (Program*)malloc(sizeof(Program));
-	NewProgram->VertexFragInOut = NewVector(sizeof(_Pair*));
+	NewProgram->VertexFragInOut = NewVector(sizeof(_VarPair));
 	VectorPushBack(GlobalPrograms, &NewProgram);
 	return GlobalPrograms->Size;
 }
@@ -2503,7 +2458,7 @@ void glLinkProgram(GLuint program)
 	_Vector* Layouts = NewVector(sizeof(glslVariable*));
 
 
-	for (int i = 0; i < MyProgram->VertexShader.GlobalVars->Size;i++)
+	for (int i = 0; i < MyProgram->VertexShader.GlobalVars->Size; i++)
 	{
 		glslVariable* VertVar;
 
@@ -2524,11 +2479,11 @@ void glLinkProgram(GLuint program)
 		if (FragVar->isUniform) VectorPushBack(Uniforms, &FragVar);
 		if (FragVar->isLayout) VectorPushBack(Layouts, &FragVar);
 	}
-	
+
 	MyProgram->Uniforms = Uniforms;
 	MyProgram->Layouts = Layouts;
 
-	for (int i = 0;i < FragIns->Size;i++)
+	for (int i = 0; i < FragIns->Size; i++)
 	{
 		glslVariable* FragIn;
 
@@ -2544,7 +2499,7 @@ void glLinkProgram(GLuint program)
 
 			if (StringEquals(FragIn->Name, String2CString(VertOut->Name)))
 			{
-				_Pair* AddPair = MakePair(&FragIn, sizeof(glslVariable*), &VertOut, sizeof(glslVariable*));
+				_VarPair AddPair = { FragIn, VertOut };
 				VectorPushBack(MyProgram->VertexFragInOut, &AddPair);
 				LinkedPair = 1;
 				break;
@@ -2842,9 +2797,9 @@ void DrawTriangle(glslVec4* Coords, _Vector** CoordData)
 
 	float minY = MAX(MIN(MIN(Coords[0].y, Coords[1].y), Coords[2].y), (float)ViewportY);
 	float maxY = MIN(MAX(MAX(Coords[0].y, Coords[1].y), Coords[2].y), (float)ViewportY + ViewportHeight - 1);
-	
 
-	for (float y = minY;y <= maxY;y++)
+
+	for (float y = minY; y <= maxY; y++)
 	{
 		if (y < 0) continue;
 		if (y >= GlobalFramebuffer->Height) break;
@@ -2852,7 +2807,7 @@ void DrawTriangle(glslVec4* Coords, _Vector** CoordData)
 		{
 			if (x < 0) continue;
 			if (x >= GlobalFramebuffer->Width) break;
-			
+
 			glslVec4 MyPoint = { x, y, 0.0f, 0.0f };
 
 			float u, v, w;
@@ -2888,32 +2843,23 @@ void DrawTriangle(glslVec4* Coords, _Vector** CoordData)
 
 						for (int i = 0; i < CoordData[0]->Size; i++)
 						{
-							_Pair* FirstArg, *SecondArg, *ThirdArg;
+							_ExVarPair FirstArg, SecondArg, ThirdArg;
 
 							VectorRead(CoordData[0], &FirstArg, i);
 							VectorRead(CoordData[1], &SecondArg, i);
 							VectorRead(CoordData[2], &ThirdArg, i);
 
-							glslExValue FirstEx, SecondEx, ThirdEx;
+							glslExValue InterpVal = InterpolateLinearEx(FirstArg.first, SecondArg.first, ThirdArg.first, u, v, w);
 
-							PairGetFirst(FirstArg, &FirstEx);
-							PairGetFirst(SecondArg, &SecondEx);
-							PairGetFirst(ThirdArg, &ThirdEx);
 
-							glslExValue InterpVal = InterpolateLinearEx(FirstEx, SecondEx, ThirdEx, u, v, w);
-
-							glslVariable* OutVar;
-							
-							PairGetSecond(FirstArg, &OutVar);
-
-							AssignToExVal(OutVar, InterpVal);
+							AssignToExVal(FirstArg.second, InterpVal);
 						}
 
 						ExecuteGLSL(ActiveProgram->FragmentShader);
 
 						float OutR, OutG, OutB, OutA;
 
-						for (int _i = 0;_i < ActiveProgram->FragmentShader.GlobalVars->Size;_i++)
+						for (int _i = 0; _i < ActiveProgram->FragmentShader.GlobalVars->Size; _i++)
 						{
 							glslVariable* Var;
 
@@ -2966,10 +2912,10 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 
 	glslVariable* glPositionVar = 0;
 
-	for (int i = 0;i < ActiveProgram->VertexShader.GlobalVars->Size;i++)
+	for (int i = 0; i < ActiveProgram->VertexShader.GlobalVars->Size; i++)
 	{
 		glslVariable* Var;
-		
+
 		VectorRead(ActiveProgram->VertexShader.GlobalVars, &Var, i);
 
 		if (StringEquals(Var->Name, "gl_Position"))
@@ -2984,17 +2930,17 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 	{
 		for (int i = first; i < first + count; i++)
 		{
-			for (int j = 0;j < ActiveVertexArray->Attribs->Size;j++)
+			for (int j = 0; j < ActiveVertexArray->Attribs->Size; j++)
 			{
 				VertexArrayAttrib Attrib;
-				
+
 				VectorRead(ActiveVertexArray->Attribs, &Attrib, j);
 
 				if (Attrib.type == GL_FLOAT)
 				{
 					float* AttribData = (float*)((uint8_t*)ActiveVertexArray->VertexBuffer->data + i * Attrib.stride + Attrib.offset);
 
-					for (int k = 0;k < ActiveProgram->Layouts->Size;k++)
+					for (int k = 0; k < ActiveProgram->Layouts->Size; k++)
 					{
 						glslVariable* Var;
 
@@ -3021,34 +2967,29 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 			if (OutPosX < 0 || OutPosX >= GlobalFramebuffer->Width) continue;
 			if (OutPosY < 0 || OutPosY >= GlobalFramebuffer->Height) continue;
 
-			for (int j = 0;j < ActiveProgram->VertexFragInOut->Size;j++)
+			for (int j = 0; j < ActiveProgram->VertexFragInOut->Size; j++)
 			{
-				_Pair* InOut;
+				_VarPair InOut;
 
 				VectorRead(ActiveProgram->VertexFragInOut, &InOut, j);
 
-				glslVariable* InOutFirst, *InOutSecond;
-
-				PairGetFirst(InOut, &InOutFirst);
-				PairGetSecond(InOut, &InOutSecond);
-
-				if (InOutFirst->Type != InOutSecond->Type)
+				if (InOut.first->Type != InOut.second->Type)
 				{
 					continue;
 				}
 
-				if (InOutFirst->Type == GLSL_FLOAT) memcpy(InOutFirst->Value.Data, InOutSecond->Value.Data, sizeof(float));
-				if (InOutFirst->Type == GLSL_VEC2) memcpy(InOutFirst->Value.Data, InOutSecond->Value.Data, sizeof(float) * 2);
-				if (InOutFirst->Type == GLSL_VEC3) memcpy(InOutFirst->Value.Data, InOutSecond->Value.Data, sizeof(float) * 3);
-				if (InOutFirst->Type == GLSL_VEC4) memcpy(InOutFirst->Value.Data, InOutSecond->Value.Data, sizeof(float) * 4);
-				if (InOutFirst->Type == GLSL_INT) memcpy(InOutFirst->Value.Data, InOutSecond->Value.Data, sizeof(int));
+				if (InOut.first->Type == GLSL_FLOAT) memcpy(InOut.first->Value.Data, InOut.second->Value.Data, sizeof(float));
+				if (InOut.first->Type == GLSL_VEC2) memcpy(InOut.first->Value.Data, InOut.second->Value.Data, sizeof(float) * 2);
+				if (InOut.first->Type == GLSL_VEC3) memcpy(InOut.first->Value.Data, InOut.second->Value.Data, sizeof(float) * 3);
+				if (InOut.first->Type == GLSL_VEC4) memcpy(InOut.first->Value.Data, InOut.second->Value.Data, sizeof(float) * 4);
+				if (InOut.first->Type == GLSL_INT) memcpy(InOut.first->Value.Data, InOut.second->Value.Data, sizeof(int));
 			}
 
 			ExecuteGLSL(ActiveProgram->FragmentShader);
 
 			float OutR, OutG, OutB, OutA;
 
-			for (int j = 0;j < ActiveProgram->FragmentShader.GlobalVars->Size;j++)
+			for (int j = 0; j < ActiveProgram->FragmentShader.GlobalVars->Size; j++)
 			{
 				glslVariable* Var;
 				VectorRead(ActiveProgram->FragmentShader.GlobalVars, &Var, j);
@@ -3109,7 +3050,7 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 
 			for (int j = 0; j < 3; j++)
 			{
-				for (int k = 0;k < ActiveVertexArray->Attribs->Size;k++)
+				for (int k = 0; k < ActiveVertexArray->Attribs->Size; k++)
 				{
 					VertexArrayAttrib Attrib;
 					VectorRead(ActiveVertexArray->Attribs, &Attrib, k);
@@ -3117,7 +3058,7 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 					{
 						float* AttribData = (float*)((uint8_t*)ActiveVertexArray->VertexBuffer->data + (i + j) * Attrib.stride + Attrib.offset);
 
-						for (int k = 0;k < ActiveProgram->Layouts->Size;k++)
+						for (int k = 0; k < ActiveProgram->Layouts->Size; k++)
 						{
 							glslVariable* Var;
 							VectorRead(ActiveProgram->Layouts, &Var, k);
@@ -3141,27 +3082,22 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 				TriangleCoords[j].z = ((float*)glPositionVar->Value.Data)[2];
 				TriangleCoords[j].w = ((float*)glPositionVar->Value.Data)[3];
 
-				TriangleVertexData[j] = NewVector(sizeof(_Pair*));
+				TriangleVertexData[j] = NewVector(sizeof(_ExVarPair));
 
-				for (int k = 0;k < ActiveProgram->VertexFragInOut->Size;k++)
+				for (int k = 0; k < ActiveProgram->VertexFragInOut->Size; k++)
 				{
-					_Pair* InOut = 0;
+					_VarPair InOut;
 
 					VectorRead(ActiveProgram->VertexFragInOut, &InOut, k);
 
-					glslVariable* InOutFirst, *InOutSecond;
-
-					PairGetFirst(InOut, &InOutFirst);
-					PairGetSecond(InOut, &InOutSecond);
-
-					if (InOutFirst->Type != InOutSecond->Type)
+					if (InOut.first->Type != InOut.second->Type)
 					{
 						continue;
 					}
-					
-					glslExValue OutExValue = VarToExVal(InOutSecond);
 
-					_Pair* OutPair = MakePair(&OutExValue, sizeof(glslExValue), &InOutFirst, sizeof(glslVariable*));
+					glslExValue OutExValue = VarToExVal(InOut.second);
+
+					_ExVarPair OutPair = { OutExValue, InOut.first };
 
 					VectorPushBack(TriangleVertexData[j], &OutPair);
 				}
@@ -3177,7 +3113,7 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 			Triangle Triangles[2];
 			int nTri = ClipTriangleAgainstNearPlane(&MyTri, Triangles);
 
-			for (int k = 0;k < nTri;k++)
+			for (int k = 0; k < nTri; k++)
 			{
 				Triangle Tri = Triangles[k];
 				for (int j = 0; j < 3; j++)
@@ -3190,25 +3126,15 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 					TriangleCoords[j].z = Tri.Verts[j].z;
 					TriangleCoords[j].w = Tri.Verts[j].w;
 				}
-				
+
 
 
 				DrawTriangle(TriangleCoords, Tri.TriangleVertexData);
 
 				// Now clean up all this mess
-				for (int _i = 0;_i < 3;_i++)
+				for (int _i = 0; _i < 3; _i++)
 				{
-					for (int _j = 0;_j < Tri.TriangleVertexData[_i]->Size;_j++)
-					{
-						_Pair* DirtyPair;
-
-						VectorRead(Tri.TriangleVertexData[_i], &DirtyPair, _j);
-
-						// Now we obliterate the mess
-						
-						free(DirtyPair);
-					}
-					free(Tri.TriangleVertexData[_i]);
+					VectorFree(Tri.TriangleVertexData[_i]);
 				}
 			}
 		}
@@ -3220,7 +3146,7 @@ void glInit(GLsizei width, GLsizei height)
 	GlobalFramebuffer = (Framebuffer*)malloc(sizeof(Framebuffer));
 	GlobalFramebuffer->Width = width;
 	GlobalFramebuffer->Height = height;
-	
+
 	GlobalFramebuffer->DepthFormat = GL_FLOAT;
 	GlobalFramebuffer->DepthAttachment = malloc(sizeof(float) * width * height);
 
@@ -3245,10 +3171,10 @@ uint32_t* glGetFramePtr()
 GLint glGetUniformLocation(GLuint program, const GLchar* name)
 {
 	Program* MyProgram;
-	
+
 	VectorRead(GlobalPrograms, &MyProgram, program - 1);
 
-	for (int i = 0;i < MyProgram->Uniforms->Size;i++)
+	for (int i = 0; i < MyProgram->Uniforms->Size; i++)
 	{
 		glslVariable* Uniform;
 
@@ -3266,7 +3192,7 @@ GLint glGetUniformLocation(GLuint program, const GLchar* name)
 void glUniform1f(GLint location, GLfloat v0)
 {
 	Program* MyProgram;
-	
+
 	VectorRead(GlobalPrograms, &MyProgram, location >> 16);
 
 	glslExValue SetVal = { GLSL_FLOAT, v0 };
@@ -3430,7 +3356,7 @@ void glUniformMatrix4fv(GLint location, GLsizei count, GLboolean transpose, cons
 }
 
 /*
-* Every function below does not need to be implemented, 
+* Every function below does not need to be implemented,
 * but is here for backwards compatibility
 */
 
