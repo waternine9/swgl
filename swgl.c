@@ -112,6 +112,7 @@ void _VectorVerify(_Vector* _Vec)
 		_Vec->Cap += 128;
 		void* NewData = malloc(_Vec->ElemSize * _Vec->Cap);
 		memcpy(NewData, _Vec->Data, _Vec->ElemSize * _Vec->Size);
+		free(_Vec->Data);
 		_Vec->Data = NewData;
 	}
 }
@@ -144,12 +145,13 @@ void VectorWrite(_Vector* _Vec, void* _Data, int _Index)
 
 void VectorFree(_Vector* _Vec)
 {
-
+	free(_Vec->Data);
+	free(_Vec);
 }
 
 void VectorCopy(_Vector* _Dest, _Vector* _Src)
 {
-	VectorFree(_Dest);
+	free(_Dest->Data);
 	_Dest->Cap = _Src->Cap;
 	_Dest->Size = _Src->Size;
 	_Dest->ElemSize = _Src->ElemSize;
@@ -194,6 +196,7 @@ void StringPush(_String* _Str, char c)
 		char* NewData = (char*)malloc(_Str->Cap);
 		memset(NewData, 0, _Str->Cap);
 		memcpy(NewData, _Str->Data, _Str->Size);
+		free(_Str->Data);
 		_Str->Data = NewData;
 	}
 }
@@ -274,12 +277,13 @@ typedef enum
 	GLSL_TOK_VAR_DECL,
 	GLSL_TOK_CONST,
 	GLSL_TOK_SWIZZLE,
+	GLSL_TOK_TEXTURE,
 
 	GLSL_TOK_FLOAT_CONSTRUCT,
 	GLSL_TOK_VEC2_CONSTRUCT,
 	GLSL_TOK_VEC3_CONSTRUCT,
 	GLSL_TOK_VEC4_CONSTRUCT,
-	GLSL_TOK_INT_CONSTRUCT
+	GLSL_TOK_INT_CONSTRUCT,
 } glslTokenType;
 
 typedef struct
@@ -534,12 +538,46 @@ int ClipTriangleAgainstNearPlane(Triangle* tri, Triangle* outTri)
 
 	if (nInsidePointCount == 0)
 	{
+		VectorFree(InExValues[0]);
+		VectorFree(InExValues[1]);
+		VectorFree(InExValues[2]);
+
+		VectorFree(OutExValues[0]);
+		VectorFree(OutExValues[1]);
+		VectorFree(OutExValues[2]);
+
+		VectorFree(outTri[0].TriangleVertexData[0]);
+		VectorFree(outTri[0].TriangleVertexData[1]);
+		VectorFree(outTri[0].TriangleVertexData[2]);
+
+		VectorFree(outTri[1].TriangleVertexData[0]);
+		VectorFree(outTri[1].TriangleVertexData[1]);
+		VectorFree(outTri[1].TriangleVertexData[2]);
+
 		return 0;
 	}
 
 	if (nInsidePointCount == 3)
 	{
+		VectorFree(outTri[0].TriangleVertexData[0]);
+		VectorFree(outTri[0].TriangleVertexData[1]);
+		VectorFree(outTri[0].TriangleVertexData[2]);
+
+		VectorFree(outTri[1].TriangleVertexData[0]);
+		VectorFree(outTri[1].TriangleVertexData[1]);
+		VectorFree(outTri[1].TriangleVertexData[2]);
+
 		outTri[0] = *tri;
+
+		VectorFree(InExValues[0]);
+		VectorFree(InExValues[1]);
+		VectorFree(InExValues[2]);
+
+		VectorFree(OutExValues[0]);
+		VectorFree(OutExValues[1]);
+		VectorFree(OutExValues[2]);
+
+
 
 		return 1;
 	}
@@ -547,7 +585,7 @@ int ClipTriangleAgainstNearPlane(Triangle* tri, Triangle* outTri)
 	if (nInsidePointCount == 1 && nOutsidePointCount == 2)
 	{
 		outTri[0].Verts[0] = *InsidePoints[0];
-		outTri[0].TriangleVertexData[0] = InExValues[0];
+		VectorCopy(outTri[0].TriangleVertexData[0], InExValues[0]);
 
 		float t;
 		outTri[0].Verts[1] = IntersectNearPlane(*InsidePoints[0], *OutsidePoints[0], &t);
@@ -580,15 +618,20 @@ int ClipTriangleAgainstNearPlane(Triangle* tri, Triangle* outTri)
 		VectorFree(OutExValues[1]);
 		VectorFree(OutExValues[2]);
 
+		VectorFree(outTri[1].TriangleVertexData[0]);
+		VectorFree(outTri[1].TriangleVertexData[1]);
+		VectorFree(outTri[1].TriangleVertexData[2]);
+
+		
 		return 1;
 	}
 
 	if (nInsidePointCount == 2 && nOutsidePointCount == 1)
 	{
 		outTri[0].Verts[0] = *InsidePoints[0];
-		outTri[0].TriangleVertexData[0] = InExValues[0];
+		VectorCopy(outTri[0].TriangleVertexData[0], InExValues[0]);
 		outTri[0].Verts[1] = *InsidePoints[1];
-		outTri[0].TriangleVertexData[1] = InExValues[1];
+		VectorCopy(outTri[0].TriangleVertexData[1], InExValues[1]);
 
 		float t;
 		outTri[0].Verts[2] = IntersectNearPlane(*InsidePoints[0], *OutsidePoints[0], &t);
@@ -603,9 +646,9 @@ int ClipTriangleAgainstNearPlane(Triangle* tri, Triangle* outTri)
 		}
 
 		outTri[1].Verts[0] = *InsidePoints[1];
-		outTri[1].TriangleVertexData[0] = InExValues[1];
+		VectorCopy(outTri[1].TriangleVertexData[0], InExValues[1]);
 		outTri[1].Verts[1] = outTri[0].Verts[2];
-		outTri[1].TriangleVertexData[1] = outTri[0].TriangleVertexData[2];
+		VectorCopy(outTri[1].TriangleVertexData[1], outTri[0].TriangleVertexData[2]);
 		outTri[1].Verts[2] = IntersectNearPlane(*InsidePoints[1], *OutsidePoints[0], &t);
 		for (int i = 0; i < tri->TriangleVertexData[2]->Size; i++)
 		{
@@ -624,7 +667,7 @@ int ClipTriangleAgainstNearPlane(Triangle* tri, Triangle* outTri)
 		VectorFree(OutExValues[0]);
 		VectorFree(OutExValues[1]);
 		VectorFree(OutExValues[2]);
-
+		
 		return 2;
 	}
 }
@@ -1007,7 +1050,16 @@ glslToken* GLSLTokenizeArgs(glslTokenizer* Tokenizer, glslScope* Scope, int EndA
 glslToken* GLSLTokenizeSubExpr(glslTokenizer* Tokenizer, glslScope* Scope, int EndAt)
 {
 	while (StringGet(Tokenizer->Code, Tokenizer->At) == ' ') Tokenizer->At++;
-
+	int Swizzle = -1;
+	for (int i = Tokenizer->At; i < EndAt; i++)
+	{
+		if (StringGet(Tokenizer->Code, i) == ' ') break;
+		if (StringGet(Tokenizer->Code, i) == '.')
+		{
+			Swizzle = i + 1;
+			break;
+		}
+	}
 	if (StringGet(Tokenizer->Code, Tokenizer->At) == '(')
 	{
 		int MatchingParam = GLSLTellNextMatching(Tokenizer, '(', ')');
@@ -1015,16 +1067,7 @@ glslToken* GLSLTokenizeSubExpr(glslTokenizer* Tokenizer, glslScope* Scope, int E
 		Tokenizer->At++;
 		glslToken* EnclosedTok = GLSLTokenizeExpr(Tokenizer, Scope, MatchingParam);
 
-		int Swizzle = -1;
-		for (int i = Tokenizer->At; i < EndAt; i++)
-		{
-			if (StringGet(Tokenizer->Code, i) == ' ') break;
-			if (StringGet(Tokenizer->Code, i) == '.')
-			{
-				Swizzle = i + 1;
-				break;
-			}
-		}
+		
 
 		if (Swizzle != -1)
 		{
@@ -1128,6 +1171,70 @@ glslToken* GLSLTokenizeSubExpr(glslTokenizer* Tokenizer, glslScope* Scope, int E
 			}
 			OutTok->Type = GLSL_TOK_INT_CONSTRUCT;
 		}
+		Tokenizer->At = EndAt + 1;
+		return OutTok;
+	}
+	if (StringEquals(ParenStr, "texture"))
+	{
+		Tokenizer->At = NextBeginParen;
+
+		int NextCloseParen = GLSLTellNextMatching(Tokenizer, '(', ')');
+
+		Tokenizer->At++;
+		glslToken* OutTok = GLSLTokenizeArgs(Tokenizer, Scope, NextCloseParen);
+
+		if (OutTok->Args->Size != 2)
+		{
+			return 0;
+		}
+
+		OutTok->Type = GLSL_TOK_TEXTURE;
+
+		if (Swizzle != -1)
+		{
+			glslToken* SwizzleTok = (glslToken*)malloc(sizeof(glslToken));
+
+			SwizzleTok->Swizzle = NewVector(sizeof(int));
+
+			SwizzleTok->Type = GLSL_TOK_SWIZZLE;
+			SwizzleTok->First = OutTok;
+			for (int i = Swizzle; i < EndAt; i++)
+			{
+				char SwizzleChar = StringGet(Tokenizer->Code, i);
+
+				if (SwizzleChar == 'x' || SwizzleChar == 's')
+				{
+					int Zero = 0;
+					VectorPushBack(SwizzleTok->Swizzle, &Zero);
+				}
+				else if (SwizzleChar == 'y' || SwizzleChar == 't')
+				{
+					int One = 1;
+					VectorPushBack(SwizzleTok->Swizzle, &One);
+				}
+				else if (SwizzleChar == 'z')
+				{
+					int Two = 2;
+					VectorPushBack(SwizzleTok->Swizzle, &Two);
+				}
+				else if (SwizzleChar == 'w')
+				{
+					int Three = 3;
+					VectorPushBack(SwizzleTok->Swizzle, &Three);
+				}
+				else if (SwizzleChar == ' ')
+				{
+					break;
+				}
+				else
+				{
+					return 0;
+				}
+			}
+			OutTok = SwizzleTok;
+		}
+
+		Tokenizer->At = EndAt + 1;
 		return OutTok;
 	}
 
@@ -1744,12 +1851,11 @@ _Vector* GlobalShaders;
 void VerifyVar(glslVariable* Var)
 {
 	if (Var->Value.Alloc == 1) return;
-
 	if (Var->Type == GLSL_FLOAT) Var->Value.Data = malloc(sizeof(float));
 	else if (Var->Type == GLSL_VEC2) Var->Value.Data = malloc(sizeof(float) * 2);
 	else if (Var->Type == GLSL_VEC3) Var->Value.Data = malloc(sizeof(float) * 3);
 	else if (Var->Type == GLSL_VEC4) Var->Value.Data = malloc(sizeof(float) * 4);
-	else if (Var->Type == GLSL_INT) Var->Value.Data = malloc(sizeof(int));
+	else if (Var->Type == GLSL_INT || Var->Type == GLSL_SAMPLER2D) Var->Value.Data = malloc(sizeof(int));
 	else if (Var->Type == GLSL_MAT2) Var->Value.Data = malloc(sizeof(float) * 4);
 	else if (Var->Type == GLSL_MAT3) Var->Value.Data = malloc(sizeof(float) * 9);
 	else if (Var->Type == GLSL_MAT4) Var->Value.Data = malloc(sizeof(float) * 16);
@@ -1760,7 +1866,7 @@ void AssignToExVal(glslVariable* AssignTo, glslExValue Val)
 {
 	VerifyVar(AssignTo);
 
-	if (AssignTo->Type != Val.Type)
+	if (AssignTo->Type != Val.Type && !(AssignTo->Type == GLSL_SAMPLER2D && Val.Type == GLSL_INT))
 	{
 		return;
 	}
@@ -1877,6 +1983,104 @@ glslExValue VarToExVal(glslVariable* Var)
 	return Out;
 }
 
+typedef struct
+{
+	float* Data;
+	int FloatsPerPixel;
+	int Width;
+	int Height;
+	GLenum SRepeat;
+	GLenum TRepeat;
+} Texture2D;
+
+_Vector* GlobalTextures;
+Texture2D* ActiveTexture2D;
+Texture2D* TextureUnits[8];
+int ActiveTextureUnit;
+
+void glGenTextures(GLsizei n, GLuint* textures)
+{
+	Texture2D* Texture = (Texture2D*)malloc(sizeof(Texture2D));
+	Texture->Data = 0;
+	Texture->FloatsPerPixel = 3;
+	Texture->Width = 0;
+	Texture->Height = 0;
+	Texture->SRepeat = GL_REPEAT;
+	Texture->TRepeat = GL_REPEAT;
+	VectorPushBack(GlobalTextures, &Texture);
+	*textures = GlobalTextures->Size;
+}
+void glBindTexture(GLenum target, GLuint texture)
+{
+	if (target == GL_TEXTURE_2D)
+	{
+
+		if (texture == 0)
+		{
+			ActiveTexture2D = 0;
+		}
+		else
+		{
+			VectorRead(GlobalTextures, &ActiveTexture2D, texture - 1);
+			VectorRead(GlobalTextures, &TextureUnits[ActiveTextureUnit], texture - 1);
+		}
+	}
+}
+
+void glActiveTexture(GLenum target)
+{
+	ActiveTextureUnit = (int)target - (int)GL_TEXTURE0;
+}
+
+void glTexParameteri(GLenum target, GLenum type, GLenum mode)
+{
+	if (target == GL_TEXTURE_2D)
+	{
+		if (!ActiveTexture2D) return;
+		if (type == GL_TEXTURE_WRAP_S)
+		{
+			ActiveTexture2D->SRepeat = mode;
+		}
+		if (type == GL_TEXTURE_WRAP_T)
+		{
+			ActiveTexture2D->TRepeat = mode;
+		}
+	}
+}
+
+void glTexImage2D(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void* data)
+{
+	if (!data) return;
+	if (border != 0) return; // By specification, must always be 0
+
+	if (target == GL_TEXTURE_2D)
+	{
+		if (!ActiveTexture2D) return;
+		if (ActiveTexture2D->Data) free(ActiveTexture2D->Data);
+		if (internalformat != format) return; // Must be the same format for both output and input
+		if (internalformat == GL_RGBA) ActiveTexture2D->FloatsPerPixel = 4;
+		if (internalformat == GL_RGB) ActiveTexture2D->FloatsPerPixel = 3;
+		if (internalformat == GL_RG) ActiveTexture2D->FloatsPerPixel = 2;
+		if (internalformat == GL_RED) ActiveTexture2D->FloatsPerPixel = 1;
+		
+		ActiveTexture2D->Width = width;
+		ActiveTexture2D->Height = height;
+
+		ActiveTexture2D->Data = (float*)malloc(ActiveTexture2D->FloatsPerPixel * width * height * sizeof(float));
+
+		float* StepData = ActiveTexture2D->Data;
+
+		for (int i = 0; i < width * height * ActiveTexture2D->FloatsPerPixel; i += ActiveTexture2D->FloatsPerPixel)
+		{
+			for (int j = 0; j < ActiveTexture2D->FloatsPerPixel; j++)
+			{
+				if (type == GL_FLOAT) ActiveTexture2D->Data[i + j] = ((float*)data)[i + j];
+				if (type == GL_UNSIGNED_BYTE) ActiveTexture2D->Data[i + j] = ((uint8_t*)data)[i + j] / 255.0f;
+			}
+		}
+	}
+}
+
 glslExValue ExecuteGLSLToken(glslToken* Token)
 {
 	if (Token->Type == GLSL_TOK_VAR)
@@ -1906,6 +2110,11 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 		else if (Token->Var->Type == GLSL_INT)
 		{
 			glslExValue ExOutput = { GLSL_INT, 0.0f, 0.0f, 0.0f, 0.0f, ((int*)Token->Var->Value.Data)[0] };
+			return ExOutput;
+		}
+		else if (Token->Var->Type == GLSL_SAMPLER2D)
+		{
+			glslExValue ExOutput = { GLSL_SAMPLER2D, 0.0f, 0.0f, 0.0f, 0.0f, ((int*)Token->Var->Value.Data)[0] };
 			return ExOutput;
 		}
 		else if (Token->Var->Type == GLSL_MAT2)
@@ -2177,6 +2386,55 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 		if (SecondResult.i != 0) FirstResult.i /= SecondResult.i;
 
 		return FirstResult;
+	}
+	else if (Token->Type == GLSL_TOK_TEXTURE)
+	{
+
+		glslToken* TokArg;
+
+		VectorRead(Token->Args, &TokArg, 0);
+		glslExValue FirstResult = ExecuteGLSLToken(TokArg);
+		VectorRead(Token->Args, &TokArg, 1);
+		glslExValue SecondResult = ExecuteGLSLToken(TokArg);
+		
+		if (FirstResult.Type != GLSL_SAMPLER2D)
+		{
+			glslExValue ExOutput = { GLSL_UNKNOWN };
+			return ExOutput;
+		}
+
+		if (SecondResult.Type != GLSL_VEC2)
+		{
+			glslExValue ExOutput = { GLSL_UNKNOWN };
+			return ExOutput;
+		}
+
+		Texture2D* Texture = TextureUnits[FirstResult.i];
+		
+		int TexelX = SecondResult.x * Texture->Width;
+		int TexelY = SecondResult.y * Texture->Height;
+
+		if (Texture->SRepeat == GL_REPEAT)
+		{
+			TexelX %= Texture->Width;
+		}
+		TexelX = MIN(MAX(TexelX, 0), Texture->Width - 1);
+
+		if (Texture->TRepeat == GL_REPEAT)
+		{
+			TexelY %= Texture->Height;
+		}
+		TexelY = MIN(MAX(TexelY, 0), Texture->Height - 1);
+
+		float* StartData = Texture->Data + Texture->FloatsPerPixel * (TexelX + TexelY * Texture->Width);
+
+		glslExValue OutVal = { GLSL_VEC4 };
+		if (Texture->FloatsPerPixel >= 1) OutVal.x = StartData[0];
+		if (Texture->FloatsPerPixel >= 2) OutVal.y = StartData[1];
+		if (Texture->FloatsPerPixel >= 3) OutVal.z = StartData[2];
+		if (Texture->FloatsPerPixel == 4) OutVal.w = StartData[3];
+
+		return OutVal;
 	}
 	else if (Token->Type == GLSL_TOK_SWIZZLE)
 	{
@@ -2649,6 +2907,8 @@ void glBufferData(GLenum target, GLsizei size, const void* data, GLenum usage)
 	}
 }
 
+
+
 GLint ViewportX;
 GLint ViewportY;
 GLsizei ViewportWidth;
@@ -2871,6 +3131,7 @@ void DrawTriangle(glslVec4* Coords, _Vector** CoordData)
 								OutG = ((float*)Var->Value.Data)[1];
 								OutB = ((float*)Var->Value.Data)[2];
 								OutA = ((float*)Var->Value.Data)[3];
+								break;
 							}
 						}
 
@@ -2948,7 +3209,7 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 
 						if (Var->Layout->Location == Attrib.index)
 						{
-							if (!Var->Value.Alloc)
+							if (Var->Value.Alloc != 1)
 							{
 								Var->Value.Alloc = 1;
 								Var->Value.Data = malloc(Attrib.size * sizeof(float));
@@ -3062,13 +3323,9 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 						{
 							glslVariable* Var;
 							VectorRead(ActiveProgram->Layouts, &Var, k);
+							VerifyVar(Var);
 							if (Var->Layout->Location == Attrib.index)
 							{
-								if (!Var->Value.Alloc)
-								{
-									Var->Value.Alloc = 1;
-									Var->Value.Data = malloc(Attrib.size * sizeof(float));
-								}
 								memcpy(Var->Value.Data, AttribData, Attrib.size * sizeof(float));
 							}
 						}
@@ -3110,6 +3367,8 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 			MyTri.TriangleVertexData[0] = TriangleVertexData[0];
 			MyTri.TriangleVertexData[1] = TriangleVertexData[1];
 			MyTri.TriangleVertexData[2] = TriangleVertexData[2];
+
+
 			Triangle Triangles[2];
 			int nTri = ClipTriangleAgainstNearPlane(&MyTri, Triangles);
 
@@ -3126,17 +3385,25 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 					TriangleCoords[j].z = Tri.Verts[j].z;
 					TriangleCoords[j].w = Tri.Verts[j].w;
 				}
-
-
-
 				DrawTriangle(TriangleCoords, Tri.TriangleVertexData);
-
-				// Now clean up all this mess
+			}
+			free(TriangleVertexData[0]->Data);
+			free(TriangleVertexData[1]->Data);
+			free(TriangleVertexData[2]->Data);
+			for (int k = 0; k < nTri; k++)
+			{
+				Triangle Tri = Triangles[k];
 				for (int _i = 0; _i < 3; _i++)
 				{
+					if (Tri.TriangleVertexData[_i]->Data != TriangleVertexData[0]->Data &&
+						Tri.TriangleVertexData[_i]->Data != TriangleVertexData[1]->Data &&
+						Tri.TriangleVertexData[_i]->Data != TriangleVertexData[2]->Data)
 					VectorFree(Tri.TriangleVertexData[_i]);
 				}
 			}
+			free(TriangleVertexData[0]);
+			free(TriangleVertexData[1]);
+			free(TriangleVertexData[2]);
 		}
 	}
 }
@@ -3158,9 +3425,12 @@ void glInit(GLsizei width, GLsizei height)
 	GlobalPrograms = NewVector(sizeof(Program*));
 	GlobalVertexArrays = NewVector(sizeof(VertexArray*));
 	GlobalShaders = NewVector(sizeof(RawShader*));
+	GlobalTextures = NewVector(sizeof(Texture2D*));
 
 	ActiveProgram = 0;
 	ActiveVertexArray = 0;
+	ActiveTexture2D = 0;
+	ActiveTextureUnit = 0;
 }
 
 uint32_t* glGetFramePtr()
@@ -3364,3 +3634,5 @@ void glEnableVertexAttribArray(GLuint index)
 {
 
 }
+
+
