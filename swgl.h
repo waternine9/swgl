@@ -7,6 +7,10 @@
 
 #include <stdint.h>
 #include <stddef.h>
+#include <math.h>
+#include <string.h>
+#include <stdlib.h>
+#include <memory.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -51,13 +55,33 @@ extern "C" {
 
 		GL_FLOAT,
 		GL_INT,
+		GL_UNSIGNED_BYTE,
 
+		GL_DEPTH_COMPONENT,
+		GL_DEPTH_STENCIL,
+		GL_RED,
+		GL_RG,
 		GL_RGB,
 		GL_RGBA,
 
 		GL_TRIANGLES,
 		GL_POINTS,
-		GL_LINES
+		GL_LINES,
+		GL_REPEAT,
+		GL_CLAMP,
+
+		GL_TEXTURE_2D,
+		GL_TEXTURE_WRAP_S,
+		GL_TEXTURE_WRAP_T,
+
+		GL_TEXTURE0,
+		GL_TEXTURE1,
+		GL_TEXTURE2,
+		GL_TEXTURE3,
+		GL_TEXTURE4,
+		GL_TEXTURE5,
+		GL_TEXTURE6,
+		GL_TEXTURE7,
 	} GLenum;
 
 	/*
@@ -85,8 +109,7 @@ extern "C" {
 	* VERTEX ARRAY DECLS
 	*/
 
-	// Only supports 1 vertex array per call for now
-	GLuint glGenVertexArrays(GLsizei n, GLuint* arrays);
+	GLuint glGenVertexArrays(GLsizei n, GLuint* arrays); // Only supports 1 vertex array per call for now
 	void glBindVertexArray(GLuint array);
 	void glVertexAttribPointer(GLuint index, GLint size, GLenum type, GLboolean normalized, GLsizei stride, const void* pointer);
 	void glEnableVertexAttribArray(GLuint index); // Doesn't do anything, here for backwards compatibility
@@ -115,7 +138,10 @@ extern "C" {
 	*/
 
 	void glGenTextures(GLsizei n, GLuint* textures);
+	void glActiveTexture(GLenum target);
 	void glBindTexture(GLenum target, GLuint texture);
+	void glTexParameteri(GLenum target, GLenum type, GLenum mode);
+	void glTexImage2D(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void* data);
 
 	/*
 	* UNIFORM FUNCTION DECLS
