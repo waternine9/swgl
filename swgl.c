@@ -227,6 +227,7 @@ _String* CString2String(const char* _Str)
 
 uint8_t StringEquals(_String* _A, const char* _B)
 {
+	if (!_A) return 0;
 	for (int i = 0; i < _A->Size; i++)
 	{
 		if (!_B[i]) return 0;
@@ -3139,6 +3140,16 @@ void DrawTriangle(glslVec4* Coords, _Vector** CoordData)
 						OutG = MIN(MAX(OutG, 0.0f), 1.0f);
 						OutB = MIN(MAX(OutB, 0.0f), 1.0f);
 						OutA = MIN(MAX(OutA, 0.0f), 1.0f);
+
+						float CurR = ((*CurCol >> 24) & 0xFF) / 255.0f;
+						float CurG = ((*CurCol >> 16) & 0xFF) / 255.0f;
+						float CurB = ((*CurCol >> 8) & 0xFF) / 255.0f;
+						float CurA = (*CurCol & 0xFF) / 255.0f;
+
+						OutR = CurR + OutA * (OutR - CurR);
+						OutG = CurG + OutA * (OutG - CurG);
+						OutB = CurB + OutA * (OutB - CurB);
+						OutA = CurA + OutA * (OutA - CurA);
 
 						uint32_t Color;
 
