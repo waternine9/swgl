@@ -2524,9 +2524,9 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 		float CurrentMipMapLevelX = TextureWidth / (TriangleMaxX - TriangleMinX);
 		float CurrentMipMapLevelY = TextureHeight / (TriangleMaxY - TriangleMinY);
 
-		float CurrentMipMapLevel = CurrentMipMapLevelX * 0.5f + CurrentMipMapLevelY * 0.5f;
+		float CurrentMipMapLevel = MAX(CurrentMipMapLevelX, CurrentMipMapLevelY);
 
-		CurrentMipMapLevel *= 0.4f;
+		CurrentMipMapLevel *= 0.3f;
 
 		if (Texture->MipMaps->Size > 0 && CurrentMipMapLevel > 0.0f)
 		{
