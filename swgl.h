@@ -92,7 +92,7 @@ extern "C" {
 	*/
 
 	GLuint glCreateShader(GLenum type);
-	void glShaderSource(GLuint shader, GLsizei count, const GLchar** string, const GLint* length);
+	void glShaderSource(GLuint shader, const GLchar* string);
 	void glCompileShader(GLuint shader);
 	void glDeleteShader(GLuint shader);
 
@@ -138,6 +138,7 @@ extern "C" {
 	void glBindTexture(GLenum target, GLuint texture);
 	void glTexParameteri(GLenum target, GLenum type, GLenum mode);
 	void glTexImage2D(GLenum target, GLint level, GLint internalformat, GLsizei width, GLsizei height, GLint border, GLenum format, GLenum type, const void* data);
+	void glGenerateMipmap(GLenum target);
 
 	/*
 	* UNIFORM FUNCTION DECLS
