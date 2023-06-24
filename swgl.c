@@ -301,6 +301,8 @@ typedef enum
 	GLSL_TOK_COS,
 	GLSL_TOK_SIN,
 	GLSL_TOK_TAN,
+	GLSL_TOK_MIN,
+	GLSL_TOK_MAX,
 
 	GLSL_TOK_FLOAT_CONSTRUCT,
 	GLSL_TOK_VEC2_CONSTRUCT,
@@ -1203,7 +1205,7 @@ glslToken* GLSLTokenizeSubExpr(glslTokenizer* Tokenizer, glslScope* Scope, int E
 		Tokenizer->At = EndAt + 1;
 		return OutTok;
 	}
-	if (StringEquals(ParenStr, "texture") || StringEquals(ParenStr, "cos") || StringEquals(ParenStr, "sin") || StringEquals(ParenStr, "tan"))
+	if (StringEquals(ParenStr, "texture") || StringEquals(ParenStr, "cos") || StringEquals(ParenStr, "sin") || StringEquals(ParenStr, "tan") || StringEquals(ParenStr, "min") || StringEquals(ParenStr, "max"))
 	{
 		Tokenizer->At = NextBeginParen;
 
@@ -1216,6 +1218,8 @@ glslToken* GLSLTokenizeSubExpr(glslTokenizer* Tokenizer, glslScope* Scope, int E
 		if (StringEquals(ParenStr, "cos")) OutTok->Type = GLSL_TOK_COS;
 		if (StringEquals(ParenStr, "sin")) OutTok->Type = GLSL_TOK_SIN;
 		if (StringEquals(ParenStr, "tan")) OutTok->Type = GLSL_TOK_TAN;
+		if (StringEquals(ParenStr, "min")) OutTok->Type = GLSL_TOK_MIN;
+		if (StringEquals(ParenStr, "max")) OutTok->Type = GLSL_TOK_MAX;
 		if (Swizzle != -1)
 		{
 			glslToken* SwizzleTok = (glslToken*)malloc(sizeof(glslToken));
@@ -2012,6 +2016,14 @@ glslExValue VarToExVal(glslVariable* Var)
 typedef struct
 {
 	float* Data;
+	int Width;
+	int Height;
+} MipMap2D;
+
+typedef struct
+{
+	float* Data;
+	_Vector* MipMaps;
 	int FloatsPerPixel;
 	int Width;
 	int Height;
@@ -2033,6 +2045,7 @@ void glGenTextures(GLsizei n, GLuint* textures)
 	Texture->Height = 0;
 	Texture->SRepeat = GL_REPEAT;
 	Texture->TRepeat = GL_REPEAT;
+	Texture->MipMaps = NewVector(sizeof(MipMap2D));
 	VectorPushBack(GlobalTextures, &Texture);
 	*textures = GlobalTextures->Size;
 }
@@ -2106,6 +2119,64 @@ void glTexImage2D(GLenum target, GLint level, GLint internalformat, GLsizei widt
 		}
 	}
 }
+
+void glGenerateMipmap(GLenum target)
+{
+	if (target == GL_TEXTURE_2D)
+	{
+		if (!ActiveTexture2D) return;
+		if (!ActiveTexture2D->Data) return;
+
+		int CurWidth = ActiveTexture2D->Width / 2;
+		int CurHeight = ActiveTexture2D->Height / 2;
+
+		float* PrevPtr = ActiveTexture2D->Data;
+
+		while (CurWidth + CurHeight > 4)
+		{
+			float* CurPtr = (float*)malloc(CurWidth * CurHeight * sizeof(float) * ActiveTexture2D->FloatsPerPixel);
+
+			for (int y = 0;y < CurHeight;y++)
+			{
+				for (int x = 0;x < CurWidth;x++)
+				{
+					float* CurPixel = CurPtr + ActiveTexture2D->FloatsPerPixel * (x + y * CurWidth);
+					if (ActiveTexture2D->FloatsPerPixel >= 1) CurPixel[0] = 0.0f;
+					if (ActiveTexture2D->FloatsPerPixel >= 2) CurPixel[1] = 0.0f;
+					if (ActiveTexture2D->FloatsPerPixel >= 3) CurPixel[2] = 0.0f;
+					if (ActiveTexture2D->FloatsPerPixel == 4) CurPixel[3] = 0.0f;
+					for (int sY = 0;sY < 2;sY++)
+					{
+						for (int sX = 0;sX < 2;sX++)
+						{
+							float* PrevPixel = PrevPtr + ActiveTexture2D->FloatsPerPixel * ((x * 2 + sX) + (y * 2 + sY) * CurWidth * 2);
+							if (ActiveTexture2D->FloatsPerPixel >= 1) CurPixel[0] += PrevPixel[0] * (sX == 0 && sY == 0 ? 2.0f : 2.0f / 3.0f);
+							if (ActiveTexture2D->FloatsPerPixel >= 2) CurPixel[1] += PrevPixel[1] * (sX == 0 && sY == 0 ? 2.0f : 2.0f / 3.0f);
+							if (ActiveTexture2D->FloatsPerPixel >= 3) CurPixel[2] += PrevPixel[2] * (sX == 0 && sY == 0 ? 2.0f : 2.0f / 3.0f);
+							if (ActiveTexture2D->FloatsPerPixel == 4) CurPixel[3] += PrevPixel[3] * (sX == 0 && sY == 0 ? 2.0f : 2.0f / 3.0f);
+						}	
+					}
+					if (ActiveTexture2D->FloatsPerPixel >= 1) CurPixel[0] /= 4.0f;
+					if (ActiveTexture2D->FloatsPerPixel >= 2) CurPixel[1] /= 4.0f;
+					if (ActiveTexture2D->FloatsPerPixel >= 3) CurPixel[2] /= 4.0f;
+					if (ActiveTexture2D->FloatsPerPixel == 4) CurPixel[3] /= 4.0f;
+				}	
+			}
+
+			MipMap2D Mipmap = { CurPtr, CurWidth, CurHeight };
+			VectorPushBack(ActiveTexture2D->MipMaps, &Mipmap);
+
+			CurWidth /= 2;
+			CurHeight /= 2;
+			PrevPtr = CurPtr;
+		}
+	}
+}
+
+float TriangleMinX;
+float TriangleMinY;
+float TriangleMaxX;
+float TriangleMaxY;
 
 glslExValue ExecuteGLSLToken(glslToken* Token)
 {
@@ -2442,28 +2513,90 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 
 		Texture2D* Texture = TextureUnits[FirstResult.i];
 		
-		int TexelX = SecondResult.x * Texture->Width;
-		int TexelY = SecondResult.y * Texture->Height;
+		float* TextureData = Texture->Data;
+		int TextureWidth = Texture->Width;
+		int TextureHeight = Texture->Height;
+
+		float* HigherTextureData = 0;
+		int HigherTextureWidth = 0;
+		int HigherTextureHeight = 0;
+
+		float CurrentMipMapLevelX = TextureWidth / (TriangleMaxX - TriangleMinX);
+		float CurrentMipMapLevelY = TextureHeight / (TriangleMaxY - TriangleMinY);
+
+		float CurrentMipMapLevel = CurrentMipMapLevelX * 0.5f + CurrentMipMapLevelY * 0.5f;
+
+		CurrentMipMapLevel *= 0.4f;
+
+		if (Texture->MipMaps->Size > 0 && CurrentMipMapLevel > 0.0f)
+		{
+			MipMap2D MipMap;
+			VectorRead(Texture->MipMaps, &MipMap, MIN(CurrentMipMapLevel, Texture->MipMaps->Size - 1));
+
+			TextureData = MipMap.Data;
+			TextureWidth = MipMap.Width;
+			TextureHeight = MipMap.Height;
+
+			VectorRead(Texture->MipMaps, &MipMap, MIN(CurrentMipMapLevel - 1, Texture->MipMaps->Size - 1));
+
+			HigherTextureData = MipMap.Data;
+			HigherTextureWidth = MipMap.Width;
+			HigherTextureHeight = MipMap.Height;
+		}
+
+
+		int TexelX = SecondResult.x * TextureWidth;
+		int TexelY = SecondResult.y * TextureHeight;
 
 		if (Texture->SRepeat == GL_REPEAT)
 		{
-			TexelX %= Texture->Width;
+			TexelX %= TextureWidth;
 		}
-		TexelX = MIN(MAX(TexelX, 0), Texture->Width - 1);
+		TexelX = MIN(MAX(TexelX, 0), TextureWidth - 1);
 
 		if (Texture->TRepeat == GL_REPEAT)
 		{
-			TexelY %= Texture->Height;
+			TexelY %= TextureHeight;
 		}
-		TexelY = MIN(MAX(TexelY, 0), Texture->Height - 1);
+		TexelY = MIN(MAX(TexelY, 0), TextureHeight - 1);
 
-		float* StartData = Texture->Data + Texture->FloatsPerPixel * (TexelX + TexelY * Texture->Width);
+		float* StartData = TextureData + Texture->FloatsPerPixel * (TexelX + TexelY * TextureWidth);
 
 		glslExValue OutVal = { GLSL_VEC4 };
 		if (Texture->FloatsPerPixel >= 1) OutVal.x = StartData[0];
 		if (Texture->FloatsPerPixel >= 2) OutVal.y = StartData[1];
 		if (Texture->FloatsPerPixel >= 3) OutVal.z = StartData[2];
 		if (Texture->FloatsPerPixel == 4) OutVal.w = StartData[3];
+
+		if (HigherTextureData)
+		{
+			int HTexelX = SecondResult.x * HigherTextureWidth;
+			int HTexelY = SecondResult.y * HigherTextureHeight;
+
+			if (Texture->SRepeat == GL_REPEAT)
+			{
+				HTexelX %= HigherTextureWidth;
+			}
+			HTexelX = MIN(MAX(HTexelX, 0), HigherTextureWidth - 1);
+
+			if (Texture->TRepeat == GL_REPEAT)
+			{
+				HTexelY %= HigherTextureHeight;
+			}
+			HTexelY = MIN(MAX(HTexelY, 0), HigherTextureHeight - 1);
+
+			StartData = HigherTextureData + Texture->FloatsPerPixel * (HTexelX + HTexelY * HigherTextureWidth);
+
+			float T = CurrentMipMapLevel - (int)CurrentMipMapLevel;
+
+			T = 1.0f - T;
+
+			if (Texture->FloatsPerPixel >= 1) OutVal.x = OutVal.x + T * (StartData[0] - OutVal.x);
+			if (Texture->FloatsPerPixel >= 2) OutVal.y = OutVal.y + T * (StartData[1] - OutVal.y);
+			if (Texture->FloatsPerPixel >= 3) OutVal.z = OutVal.z + T * (StartData[2] - OutVal.z);
+			if (Texture->FloatsPerPixel == 4) OutVal.w = OutVal.w + T * (StartData[3] - OutVal.w);
+
+		}
 
 		return OutVal;
 	}
@@ -2520,6 +2653,48 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 		Result.z = tan(Result.z);
 		Result.w = tan(Result.w);
 		return Result;
+	}
+	else if (Token->Type == GLSL_TOK_MIN)
+	{
+		if (Token->Args->Size != 2)
+		{
+			glslExValue ExOutput = { GLSL_UNKNOWN };
+			return ExOutput;
+		}
+
+		glslToken* TokArg;
+
+		VectorRead(Token->Args, &TokArg, 0);
+		glslExValue FirstResult = ExecuteGLSLToken(TokArg);
+		VectorRead(Token->Args, &TokArg, 1);
+		glslExValue SecondResult = ExecuteGLSLToken(TokArg);
+		
+		FirstResult.x = MIN(FirstResult.x, SecondResult.x);
+		FirstResult.y = MIN(FirstResult.y, SecondResult.y);
+		FirstResult.z = MIN(FirstResult.z, SecondResult.z);
+		FirstResult.w = MIN(FirstResult.w, SecondResult.w);
+		return FirstResult;
+	}
+	else if (Token->Type == GLSL_TOK_MAX)
+	{
+		if (Token->Args->Size != 2)
+		{
+			glslExValue ExOutput = { GLSL_UNKNOWN };
+			return ExOutput;
+		}
+
+		glslToken* TokArg;
+
+		VectorRead(Token->Args, &TokArg, 0);
+		glslExValue FirstResult = ExecuteGLSLToken(TokArg);
+		VectorRead(Token->Args, &TokArg, 1);
+		glslExValue SecondResult = ExecuteGLSLToken(TokArg);
+
+		FirstResult.x = MAX(FirstResult.x, SecondResult.x);
+		FirstResult.y = MAX(FirstResult.y, SecondResult.y);
+		FirstResult.z = MAX(FirstResult.z, SecondResult.z);
+		FirstResult.w = MAX(FirstResult.w, SecondResult.w);
+		return FirstResult;
 	}
 	else if (Token->Type == GLSL_TOK_SWIZZLE)
 	{
@@ -3067,6 +3242,23 @@ float Dot2(glslVec4 x, glslVec4 y)
 	return x.x * y.x + x.y * y.y;
 }
 
+float rsqrt(float number)
+{
+	long i;
+	float x2, y;
+	const float threehalfs = 1.5F;
+
+	x2 = number * 0.5F;
+	y  = number;
+	i  = * ( long * ) &y;                       // evil floating point bit level hacking
+	i  = 0x5f3759df - ( i >> 1 );               // what the fuck?
+	y  = * ( float * ) &i;
+	y  = y * ( threehalfs - ( x2 * y * y ) );   // 1st iteration
+	y  = y * ( threehalfs - ( x2 * y * y ) );   // 2nd iteration, this can be removed
+
+ 	return y;
+}
+
 void Barycentric(glslVec4 a, glslVec4 b, glslVec4 c, glslVec4 p, float* u, float* v, float* w)
 {
 	glslVec4 v0 = Sub(b, a), v1 = Sub(c, a), v2 = Sub(p, a);
@@ -3121,10 +3313,14 @@ void DrawTriangle(glslVec4* Coords, _Vector** CoordData)
 	float minY = MAX(MIN(MIN(Coords[0].y, Coords[1].y), Coords[2].y), (float)ViewportY);
 	float maxY = MIN(MAX(MAX(Coords[0].y, Coords[1].y), Coords[2].y), (float)ViewportY + ViewportHeight);
 
+	TriangleMinX = minX;
+	TriangleMaxX = maxX;
+	TriangleMinY = minY;
+	TriangleMaxY = maxY;
 
 	for (float y = minY; y < maxY; y++)
 	{
-		for (float x = minX; x < maxX; x++)
+		for (float x = MAX(minX, 0.0f); x < MIN(maxX, GlobalFramebuffer->Width); x++)
 		{
 
 			glslVec4 MyPoint = { x, y, 0.0f, 0.0f };
@@ -3198,7 +3394,7 @@ void DrawTriangle(glslVec4* Coords, _Vector** CoordData)
 						OutG = MIN(MAX(OutG, 0.0f), 1.0f);
 						OutB = MIN(MAX(OutB, 0.0f), 1.0f);
 						OutA = MIN(MAX(OutA, 0.0f), 1.0f);
-						OutA *= MIN((MIN(MIN(MIN(u, 1.0f - u), MIN(v, 1.0f - v)), MIN(w, 1.0f - w))) * 50.0f, 1.0f); // UNCOMMENT FOR AA
+						//OutA *= MIN((MIN(MIN(MIN(u, 1.0f - u), MIN(v, 1.0f - v)), MIN(w, 1.0f - w))) * 50.0f, 1.0f); // UNCOMMENT FOR AA
 
 						float CurR = ((*CurCol >> 24) & 0xFF) / 255.0f;
 						float CurG = ((*CurCol >> 16) & 0xFF) / 255.0f;
@@ -3703,4 +3899,6 @@ void glEnableVertexAttribArray(GLuint index)
 {
 
 }
+
+
 
