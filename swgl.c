@@ -1,6 +1,6 @@
 #include "swgl.h"
 
-#include <memory.h> // Comment this line out for freestanding, you'll have to include your header files though that should allow malloc, memcpy, memset, and free.
+#include "../memory.hpp" // Comment this line out for freestanding, you'll have to include your header files though that should allow malloc, memcpy, memset, and free.
 
 /*
 * HELPER CONSTANTS
@@ -85,6 +85,25 @@ int atoi(const char* str)
 
 	// Return the resultant integer
 	return sign * result;
+}
+
+float sin(float x)
+{
+	x = x * 0.318;
+	int ix = (int)x;
+	x -= ix;
+	if (ix % 2) return -4 * (x - x * x);
+	return 4 * (x - x * x);
+}
+
+float cos(float x)
+{
+	return sin(x + 1.57f);
+}
+
+float tan(float x)
+{
+	return sin(x) / cos(x);
 }
 
 typedef struct
@@ -279,6 +298,9 @@ typedef enum
 	GLSL_TOK_CONST,
 	GLSL_TOK_SWIZZLE,
 	GLSL_TOK_TEXTURE,
+	GLSL_TOK_COS,
+	GLSL_TOK_SIN,
+	GLSL_TOK_TAN,
 
 	GLSL_TOK_FLOAT_CONSTRUCT,
 	GLSL_TOK_VEC2_CONSTRUCT,
@@ -1051,14 +1073,20 @@ glslToken* GLSLTokenizeArgs(glslTokenizer* Tokenizer, glslScope* Scope, int EndA
 glslToken* GLSLTokenizeSubExpr(glslTokenizer* Tokenizer, glslScope* Scope, int EndAt)
 {
 	while (StringGet(Tokenizer->Code, Tokenizer->At) == ' ') Tokenizer->At++;
+	int SCounter = 0;
 	int Swizzle = -1;
 	for (int i = Tokenizer->At; i < EndAt; i++)
 	{
 		if (StringGet(Tokenizer->Code, i) == ' ') break;
+		if (StringGet(Tokenizer->Code, i) == '(') SCounter++;
+		if (StringGet(Tokenizer->Code, i) == ')') SCounter--;
 		if (StringGet(Tokenizer->Code, i) == '.')
 		{
-			Swizzle = i + 1;
-			break;
+			if (SCounter == 0)
+			{
+				Swizzle = i + 1;
+				break;
+			}
 		}
 	}
 	if (StringGet(Tokenizer->Code, Tokenizer->At) == '(')
@@ -1175,7 +1203,7 @@ glslToken* GLSLTokenizeSubExpr(glslTokenizer* Tokenizer, glslScope* Scope, int E
 		Tokenizer->At = EndAt + 1;
 		return OutTok;
 	}
-	if (StringEquals(ParenStr, "texture"))
+	if (StringEquals(ParenStr, "texture") || StringEquals(ParenStr, "cos") || StringEquals(ParenStr, "sin") || StringEquals(ParenStr, "tan"))
 	{
 		Tokenizer->At = NextBeginParen;
 
@@ -1184,13 +1212,10 @@ glslToken* GLSLTokenizeSubExpr(glslTokenizer* Tokenizer, glslScope* Scope, int E
 		Tokenizer->At++;
 		glslToken* OutTok = GLSLTokenizeArgs(Tokenizer, Scope, NextCloseParen);
 
-		if (OutTok->Args->Size != 2)
-		{
-			return 0;
-		}
-
-		OutTok->Type = GLSL_TOK_TEXTURE;
-
+		if (StringEquals(ParenStr, "texture")) OutTok->Type = GLSL_TOK_TEXTURE;
+		if (StringEquals(ParenStr, "cos")) OutTok->Type = GLSL_TOK_COS;
+		if (StringEquals(ParenStr, "sin")) OutTok->Type = GLSL_TOK_SIN;
+		if (StringEquals(ParenStr, "tan")) OutTok->Type = GLSL_TOK_TAN;
 		if (Swizzle != -1)
 		{
 			glslToken* SwizzleTok = (glslToken*)malloc(sizeof(glslToken));
@@ -2390,6 +2415,11 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 	}
 	else if (Token->Type == GLSL_TOK_TEXTURE)
 	{
+		if (Token->Args->Size != 2)
+		{
+			glslExValue ExOutput = { GLSL_UNKNOWN };
+			return ExOutput;
+		}
 
 		glslToken* TokArg;
 
@@ -2436,6 +2466,60 @@ glslExValue ExecuteGLSLToken(glslToken* Token)
 		if (Texture->FloatsPerPixel == 4) OutVal.w = StartData[3];
 
 		return OutVal;
+	}
+	else if (Token->Type == GLSL_TOK_COS)
+	{
+		if (Token->Args->Size != 1)
+		{
+			glslExValue ExOutput = { GLSL_UNKNOWN };
+			return ExOutput;
+		}
+
+		glslToken* TokArg;
+
+		VectorRead(Token->Args, &TokArg, 0);
+		glslExValue Result = ExecuteGLSLToken(TokArg);
+		Result.x = cos(Result.x);
+		Result.y = cos(Result.y);
+		Result.z = cos(Result.z);
+		Result.w = cos(Result.w);
+		return Result;
+	}
+	else if (Token->Type == GLSL_TOK_SIN)
+	{
+		if (Token->Args->Size != 1)
+		{
+			glslExValue ExOutput = { GLSL_UNKNOWN };
+			return ExOutput;
+		}
+
+		glslToken* TokArg;
+
+		VectorRead(Token->Args, &TokArg, 0);
+		glslExValue Result = ExecuteGLSLToken(TokArg);
+		Result.x = sin(Result.x);
+		Result.y = sin(Result.y);
+		Result.z = sin(Result.z);
+		Result.w = sin(Result.w);
+		return Result;
+	}
+	else if (Token->Type == GLSL_TOK_TAN)
+	{
+		if (Token->Args->Size != 1)
+		{
+			glslExValue ExOutput = { GLSL_UNKNOWN };
+			return ExOutput;
+		}
+
+		glslToken* TokArg;
+
+		VectorRead(Token->Args, &TokArg, 0);
+		glslExValue Result = ExecuteGLSLToken(TokArg);
+		Result.x = tan(Result.x);
+		Result.y = tan(Result.y);
+		Result.z = tan(Result.z);
+		Result.w = tan(Result.w);
+		return Result;
 	}
 	else if (Token->Type == GLSL_TOK_SWIZZLE)
 	{
@@ -2620,23 +2704,9 @@ GLuint glCreateShader(GLenum type)
 	return GlobalShaders->Size - 1;
 }
 
-void glShaderSource(GLuint shader, GLsizei count, const GLchar** string, const GLint* length)
+void glShaderSource(GLuint shader, const GLchar* string)
 {
-	_String* ShaderCode = NewString();
-	for (int i = 0; i < count; i++)
-	{
-		if (!length)
-		{
-			StringAppend(ShaderCode, CString2String((const char*)string[i]));
-		}
-		else
-		{
-			for (int j = 0; j < length[i]; j++)
-			{
-				StringPush(ShaderCode, string[i][j]);
-			}
-		}
-	}
+	_String* ShaderCode = CString2String((const char*)string);
 
 	RawShader* TargetShader;
 
@@ -3074,7 +3144,7 @@ void DrawTriangle(glslVec4* Coords, _Vector** CoordData)
 			float u, v, w;
 			Barycentric(Coords[0], Coords[1], Coords[2], MyPoint, &u, &v, &w);
 
-			if (u >= -0.002f && v >= -0.002f && w >= -0.002f)
+			if (u >= 0.0f && v >= 0.0f && w >= 0.0f)
 			{
 				float uCorrected = u / Coords[0].w;
 				float vCorrected = v / Coords[1].w;
@@ -3140,6 +3210,7 @@ void DrawTriangle(glslVec4* Coords, _Vector** CoordData)
 						OutG = MIN(MAX(OutG, 0.0f), 1.0f);
 						OutB = MIN(MAX(OutB, 0.0f), 1.0f);
 						OutA = MIN(MAX(OutA, 0.0f), 1.0f);
+						OutA = MIN((MIN(MIN(MIN(u, 1.0f - u), MIN(v, 1.0f - v)), MIN(w, 1.0f - w))) * 400.0f, 1.0f);
 
 						float CurR = ((*CurCol >> 24) & 0xFF) / 255.0f;
 						float CurG = ((*CurCol >> 16) & 0xFF) / 255.0f;
@@ -3382,7 +3453,6 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 
 			Triangle Triangles[2];
 			int nTri = ClipTriangleAgainstNearPlane(&MyTri, Triangles);
-
 			for (int k = 0; k < nTri; k++)
 			{
 				Triangle Tri = Triangles[k];
@@ -3645,5 +3715,4 @@ void glEnableVertexAttribArray(GLuint index)
 {
 
 }
-
 
