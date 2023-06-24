@@ -3022,14 +3022,10 @@ void glClear(GLuint flags)
 		ClearColor |= (uint32_t)(ClearColorBlue * 255) << 8;
 		ClearColor |= (uint32_t)(ClearColorAlpha * 255);
 
-		for (int y = ViewportY; y < ViewportY + ViewportHeight; y++)
+		for (int y = MAX(ViewportY, 0); y < MIN(ViewportY + ViewportHeight, GlobalFramebuffer->Height); y++)
 		{
-			if (y < 0) continue;
-			if (y >= GlobalFramebuffer->Height) break;
-			for (int x = ViewportX; x < ViewportX + ViewportWidth; x++)
+			for (int x = MAX(ViewportX, 0); x < MIN(ViewportX + ViewportWidth, GlobalFramebuffer->Width); x++)
 			{
-				if (x < 0) continue;
-				if (x >= GlobalFramebuffer->Width) break;
 				GlobalFramebuffer->ColorAttachment[y * GlobalFramebuffer->Width + x] = ClearColor;
 			}
 		}
@@ -3038,14 +3034,10 @@ void glClear(GLuint flags)
 	{
 		if (GlobalFramebuffer->DepthFormat == GL_FLOAT)
 		{
-			for (int y = ViewportY; y < ViewportY + ViewportHeight; y++)
+			for (int y = MAX(ViewportY, 0); y < MIN(ViewportY + ViewportHeight, GlobalFramebuffer->Height); y++)
 			{
-				if (y < 0) continue;
-				if (y >= GlobalFramebuffer->Height) break;
-				for (int x = ViewportX; x < ViewportX + ViewportWidth; x++)
+				for (int x = MAX(ViewportX, 0); x < MIN(ViewportX + ViewportWidth, GlobalFramebuffer->Width); x++)
 				{
-					if (x < 0) continue;
-					if (x >= GlobalFramebuffer->Width) break;
 					((GLfloat*)GlobalFramebuffer->DepthAttachment)[y * GlobalFramebuffer->Width + x] = 0.0f;
 				}
 			}
@@ -3124,20 +3116,16 @@ void DrawTriangle(glslVec4* Coords, _Vector** CoordData)
 {
 
 	float minX = MAX(MIN(MIN(Coords[0].x, Coords[1].x), Coords[2].x), (float)ViewportX);
-	float maxX = MIN(MAX(MAX(Coords[0].x, Coords[1].x), Coords[2].x), (float)ViewportX + ViewportWidth - 1);
+	float maxX = MIN(MAX(MAX(Coords[0].x, Coords[1].x), Coords[2].x), (float)ViewportX + ViewportWidth);
 
 	float minY = MAX(MIN(MIN(Coords[0].y, Coords[1].y), Coords[2].y), (float)ViewportY);
-	float maxY = MIN(MAX(MAX(Coords[0].y, Coords[1].y), Coords[2].y), (float)ViewportY + ViewportHeight - 1);
+	float maxY = MIN(MAX(MAX(Coords[0].y, Coords[1].y), Coords[2].y), (float)ViewportY + ViewportHeight);
 
 
-	for (float y = minY; y <= maxY; y++)
+	for (float y = minY; y < maxY; y++)
 	{
-		if (y < 0) continue;
-		if (y >= GlobalFramebuffer->Height) break;
-		for (float x = minX; x <= maxX; x++)
+		for (float x = minX; x < maxX; x++)
 		{
-			if (x < 0) continue;
-			if (x >= GlobalFramebuffer->Width) break;
 
 			glslVec4 MyPoint = { x, y, 0.0f, 0.0f };
 
@@ -3164,12 +3152,12 @@ void DrawTriangle(glslVec4* Coords, _Vector** CoordData)
 
 				if (GlobalFramebuffer->DepthFormat == GL_FLOAT)
 				{
-					float* CurZ = &(((float*)GlobalFramebuffer->DepthAttachment)[(int)x + (int)y * GlobalFramebuffer->Width]);
+					float* CurZ = &(((float*)GlobalFramebuffer->DepthAttachment)[(int)x + MIN(GlobalFramebuffer->Height - 1, MAX(0, ((ViewportHeight - ((int)y - ViewportY + 1)) + ViewportY))) * GlobalFramebuffer->Width]);
 					if (*CurZ == 0.0f || *CurZ >= z)
 					{
 						*CurZ = z;
 
-						uint32_t* CurCol = &(GlobalFramebuffer->ColorAttachment[(int)x + ((ViewportHeight - ((int)y - ViewportY + 1)) + ViewportY) * GlobalFramebuffer->Width]);
+						uint32_t* CurCol = &(GlobalFramebuffer->ColorAttachment[(int)x + MIN(GlobalFramebuffer->Height - 1, MAX(0, ((ViewportHeight - ((int)y - ViewportY + 1)) + ViewportY))) * GlobalFramebuffer->Width]);
 
 
 						for (int i = 0; i < CoordData[0]->Size; i++)
@@ -3210,7 +3198,7 @@ void DrawTriangle(glslVec4* Coords, _Vector** CoordData)
 						OutG = MIN(MAX(OutG, 0.0f), 1.0f);
 						OutB = MIN(MAX(OutB, 0.0f), 1.0f);
 						OutA = MIN(MAX(OutA, 0.0f), 1.0f);
-						// OutA *= MIN((MIN(MIN(MIN(u, 1.0f - u), MIN(v, 1.0f - v)), MIN(w, 1.0f - w))) * 750.0f, 1.0f); // UNCOMMENT FOR AA
+						OutA *= MIN((MIN(MIN(MIN(u, 1.0f - u), MIN(v, 1.0f - v)), MIN(w, 1.0f - w))) * 50.0f, 1.0f); // UNCOMMENT FOR AA
 
 						float CurR = ((*CurCol >> 24) & 0xFF) / 255.0f;
 						float CurG = ((*CurCol >> 16) & 0xFF) / 255.0f;
