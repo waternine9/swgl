@@ -3313,125 +3313,161 @@ float DistBetweenPointAndLine(float x1, float y1, float x2, float y2, float x3, 
 
 void DrawTriangle(glslVec4* Coords, _SwglVector* CoordData)
 {
-
-	float minX = MAX(MIN(MIN(Coords[0].x, Coords[1].x), Coords[2].x), (float)ViewportX);
-	float maxX = MIN(MAX(MAX(Coords[0].x, Coords[1].x), Coords[2].x), (float)ViewportX + ViewportWidth);
-
-	float minY = MAX(MIN(MIN(Coords[0].y, Coords[1].y), Coords[2].y), (float)ViewportY);
-	float maxY = MIN(MAX(MAX(Coords[0].y, Coords[1].y), Coords[2].y), (float)ViewportY + ViewportHeight);
-
 	MipMapLevel = 40.0f / DistBetweenPointAndLine(Coords[0].x, Coords[0].y, Coords[1].x, Coords[1].y, Coords[2].x, Coords[2].y);
 
-	for (float y = minY; y < maxY; y++)
+	glslVec4 OldCoords[3];
+	OldCoords[0] = Coords[0];
+	OldCoords[1] = Coords[1];
+	OldCoords[2] = Coords[2];
+
+	if (Coords[0].y > Coords[2].y)
 	{
-		for (float x = MAX(minX, 0.0f); x < MIN(maxX, GlobalFramebuffer->Width); x++)
+		glslVec4 Temp = Coords[0];
+		Coords[0] = Coords[2];
+		Coords[2] = Temp;
+	}
+
+	if (Coords[0].y > Coords[1].y)
+	{
+		glslVec4 Temp = Coords[0];
+		Coords[0] = Coords[1];
+		Coords[1] = Temp;
+	}
+
+	if (Coords[1].y > Coords[2].y)
+	{
+		glslVec4 Temp = Coords[1];
+		Coords[1] = Coords[2];
+		Coords[2] = Temp;
+	}
+
+	if (Coords[0].y >= ViewportY + ViewportHeight) return;
+
+	float s0 = (Coords[2].x - Coords[0].x) / MAX(Coords[2].y - Coords[0].y, 1.0f);
+	float s1 = (Coords[1].x - Coords[0].x) / MAX(Coords[1].y - Coords[0].y, 1.0f);
+	float s2 = (Coords[2].x - Coords[1].x) / MAX(Coords[2].y - Coords[1].y, 1.0f);
+
+	float y = MAX(Coords[0].y, ViewportY);
+	float x0 = Coords[0].x;
+	float x1 = x0;
+
+	uint8_t Switched = 0;
+
+	for (; y < MIN(Coords[2].y, ViewportY + ViewportHeight); y++,x0 += s0,x1 += s1)
+	{
+		for (int x = MAX(MIN(x0, x1), ViewportX);x < MIN(MAX(x0, x1), ViewportX + ViewportWidth);x++)
 		{
+			if (x < 0) continue;
+			if (x >= GlobalFramebuffer->Width) break;
 			glslVec4 MyPoint = { x, y, 0.0f, 0.0f };
 
 			float u, v, w;
-			Barycentric(Coords[0], Coords[1], Coords[2], MyPoint, &u, &v, &w);
+			Barycentric(OldCoords[0], OldCoords[1], OldCoords[2], MyPoint, &u, &v, &w);
 
-			if (u >= 0.0f && v >= 0.0f && w >= 0.0f)
+			float uCorrected = u / OldCoords[0].w;
+			float vCorrected = v / OldCoords[1].w;
+			float wCorrected = w / OldCoords[2].w;
+
+			float sum = uCorrected + vCorrected + wCorrected;
+
+
+			uCorrected /= sum;
+			vCorrected /= sum;
+			wCorrected /= sum;
+
+			u = uCorrected;
+			v = vCorrected;
+			w = wCorrected;
+
+			float z = (OldCoords[0].z * u + OldCoords[1].z * v + OldCoords[2].z * w);
+
+			if (GlobalFramebuffer->DepthFormat == GL_FLOAT)
 			{
-				float uCorrected = u / Coords[0].w;
-				float vCorrected = v / Coords[1].w;
-				float wCorrected = w / Coords[2].w;
-
-				float sum = uCorrected + vCorrected + wCorrected;
-
-
-				uCorrected /= sum;
-				vCorrected /= sum;
-				wCorrected /= sum;
-
-				u = uCorrected;
-				v = vCorrected;
-				w = wCorrected;
-
-				float z = (Coords[0].z * u + Coords[1].z * v + Coords[2].z * w);
-
-				if (GlobalFramebuffer->DepthFormat == GL_FLOAT)
+				float* CurZ = &(((float*)GlobalFramebuffer->DepthAttachment)[(int)x + MIN(GlobalFramebuffer->Height - 1, MAX(0, ((ViewportHeight - ((int)y - ViewportY + 1)) + ViewportY))) * GlobalFramebuffer->Width]);
+				if (*CurZ == 0.0f || *CurZ >= z)
 				{
-					float* CurZ = &(((float*)GlobalFramebuffer->DepthAttachment)[(int)x + MIN(GlobalFramebuffer->Height - 1, MAX(0, ((ViewportHeight - ((int)y - ViewportY + 1)) + ViewportY))) * GlobalFramebuffer->Width]);
-					if (*CurZ == 0.0f || *CurZ >= z)
+					*CurZ = z;
+
+					uint32_t* CurCol = &(GlobalFramebuffer->ColorAttachment[(int)x + MIN(GlobalFramebuffer->Height - 1, MAX(0, ((ViewportHeight - ((int)y - ViewportY + 1)) + ViewportY))) * GlobalFramebuffer->Width]);
+
+
+					for (int i = 0; i < CoordData[0].Size; i++)
 					{
-						*CurZ = z;
+						_ExVarPair FirstArg, SecondArg, ThirdArg;
 
-						uint32_t* CurCol = &(GlobalFramebuffer->ColorAttachment[(int)x + MIN(GlobalFramebuffer->Height - 1, MAX(0, ((ViewportHeight - ((int)y - ViewportY + 1)) + ViewportY))) * GlobalFramebuffer->Width]);
+						swglVectorRead(&CoordData[0], &FirstArg, i);
+						swglVectorRead(&CoordData[1], &SecondArg, i);
+						swglVectorRead(&CoordData[2], &ThirdArg, i);
 
-
-						for (int i = 0; i < CoordData[0].Size; i++)
-						{
-							_ExVarPair FirstArg, SecondArg, ThirdArg;
-
-							swglVectorRead(&CoordData[0], &FirstArg, i);
-							swglVectorRead(&CoordData[1], &SecondArg, i);
-							swglVectorRead(&CoordData[2], &ThirdArg, i);
-
-							glslExValue InterpVal = InterpolateLinearEx(FirstArg.first, SecondArg.first, ThirdArg.first, u, v, w);
+						glslExValue InterpVal = InterpolateLinearEx(FirstArg.first, SecondArg.first, ThirdArg.first, u, v, w);
 
 
-							AssignToExVal(FirstArg.second, InterpVal);
-						}
-
-						ExecuteGLSL(ActiveProgram->FragmentShader);
-
-						float OutR, OutG, OutB, OutA;
-
-						for (int _i = 0; _i < ActiveProgram->FragmentShader.GlobalVars.Size; _i++)
-						{
-							glslVariable* Var;
-
-							swglVectorRead(&ActiveProgram->FragmentShader.GlobalVars, &Var, _i);
-
-							if (Var->isOut)
-							{
-								OutR = ((float*)Var->Value.Data)[0];
-								OutG = ((float*)Var->Value.Data)[1];
-								OutB = ((float*)Var->Value.Data)[2];
-								OutA = ((float*)Var->Value.Data)[3];
-								break;
-							}
-						}
-
-						OutR = MIN(MAX(OutR, 0.0f), 1.0f);
-						OutG = MIN(MAX(OutG, 0.0f), 1.0f);
-						OutB = MIN(MAX(OutB, 0.0f), 1.0f);
-						OutA = MIN(MAX(OutA, 0.0f), 1.0f);
-						//OutA *= MIN((MIN(MIN(MIN(u, 1.0f - u), MIN(v, 1.0f - v)), MIN(w, 1.0f - w))) * 50.0f, 1.0f); // UNCOMMENT FOR AA
-
-						float CurR = ((*CurCol >> 24) & 0xFF) / 255.0f;
-						float CurG = ((*CurCol >> 16) & 0xFF) / 255.0f;
-						float CurB = ((*CurCol >> 8) & 0xFF) / 255.0f;
-						float CurA = (*CurCol & 0xFF) / 255.0f;
-
-						OutR = CurR + OutA * (OutR - CurR);
-						OutG = CurG + OutA * (OutG - CurG);
-						OutB = CurB + OutA * (OutB - CurB);
-						OutA = CurA + OutA * (OutA - CurA);
-
-						uint32_t Color;
-
-						if (GlobalFramebuffer->ColorFormat == GL_RGB)
-						{
-							Color = 0xFF;
-							Color |= (int)(OutR * 255) << 24;
-							Color |= (int)(OutG * 255) << 16;
-							Color |= (int)(OutB * 255) << 8;
-						}
-						else if (GlobalFramebuffer->ColorFormat == GL_RGBA)
-						{
-							Color = 0x0;
-							Color |= (int)(OutR * 255) << 24;
-							Color |= (int)(OutG * 255) << 16;
-							Color |= (int)(OutB * 255) << 8;
-							Color |= (int)(OutA * 255);
-						}
-
-						*CurCol = Color;
+						AssignToExVal(FirstArg.second, InterpVal);
 					}
+
+					ExecuteGLSL(ActiveProgram->FragmentShader);
+
+					float OutR, OutG, OutB, OutA;
+
+					for (int _i = 0; _i < ActiveProgram->FragmentShader.GlobalVars.Size; _i++)
+					{
+						glslVariable* Var;
+
+						swglVectorRead(&ActiveProgram->FragmentShader.GlobalVars, &Var, _i);
+
+						if (Var->isOut)
+						{
+							OutR = ((float*)Var->Value.Data)[0];
+							OutG = ((float*)Var->Value.Data)[1];
+							OutB = ((float*)Var->Value.Data)[2];
+							OutA = ((float*)Var->Value.Data)[3];
+							break;
+						}
+					}
+
+					OutR = MIN(MAX(OutR, 0.0f), 1.0f);
+					OutG = MIN(MAX(OutG, 0.0f), 1.0f);
+					OutB = MIN(MAX(OutB, 0.0f), 1.0f);
+					OutA = MIN(MAX(OutA, 0.0f), 1.0f);
+					//OutA *= MIN((MIN(MIN(MIN(u, 1.0f - u), MIN(v, 1.0f - v)), MIN(w, 1.0f - w))) * 50.0f, 1.0f); // UNCOMMENT FOR AA
+
+					float CurR = ((*CurCol >> 24) & 0xFF) / 255.0f;
+					float CurG = ((*CurCol >> 16) & 0xFF) / 255.0f;
+					float CurB = ((*CurCol >> 8) & 0xFF) / 255.0f;
+					float CurA = (*CurCol & 0xFF) / 255.0f;
+
+					OutR = CurR + OutA * (OutR - CurR);
+					OutG = CurG + OutA * (OutG - CurG);
+					OutB = CurB + OutA * (OutB - CurB);
+					OutA = CurA + OutA * (OutA - CurA);
+
+					uint32_t Color;
+
+					if (GlobalFramebuffer->ColorFormat == GL_RGB)
+					{
+						Color = 0xFF;
+						Color |= (int)(OutR * 255) << 24;
+						Color |= (int)(OutG * 255) << 16;
+						Color |= (int)(OutB * 255) << 8;
+					}
+					else if (GlobalFramebuffer->ColorFormat == GL_RGBA)
+					{
+						Color = 0x0;
+						Color |= (int)(OutR * 255) << 24;
+						Color |= (int)(OutG * 255) << 16;
+						Color |= (int)(OutB * 255) << 8;
+						Color |= (int)(OutA * 255);
+					}
+
+					*CurCol = Color;
 				}
 			}
+		}
+		if (y + 1 >= Coords[1].y && !Switched)
+		{
+			Switched = 1;
+			s1 = s2;
+			x1 = Coords[1].x;
 		}
 	}
 }
